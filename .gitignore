@@ -1,0 +1,13 @@
+# Test artifacts
+/tests/tmp/
+/tests/*.log
+
+# Local editor scratch
+.vscode/
+.idea/
+*.swp
+*.bak
+
+# OS
+.DS_Store
+Thumbs.db
