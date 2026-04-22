@@ -1,0 +1,15 @@
+name: claude
+display: Claude
+adapter_path: .claude/CLAUDE.md
+memory_dir: .claude/memory
+log_path: docs/agents/claude.md
+platform:
+  config_discovery:
+    - .claude/CLAUDE.md
+    - ~/.claude/CLAUDE.md
+  trigger_type: session-hook-or-slash-command
+  bootstrap_command: "/collab-init"
+  supports_hooks: true
+notes: |
+  Global memory at ~/.claude/memory/ stays for universal preferences.
+  In-repo .claude/memory/ is for this project's truths. Do not cross-contaminate.

@@ -1,0 +1,14 @@
+name: codex
+display: Codex
+adapter_path: .codex/CODEX.md
+memory_dir: .codex/memory
+log_path: docs/agents/codex.md
+platform:
+  config_discovery:
+    - .codex/CODEX.md
+    - AGENTS.md
+  trigger_type: script-only
+  bootstrap_command: "./scripts/collab-init.sh"
+  supports_hooks: false
+notes: |
+  Also ships .codex/SESSION_CHECKLIST.md summarizing start/end ritual.

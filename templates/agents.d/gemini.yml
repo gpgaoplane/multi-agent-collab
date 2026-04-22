@@ -1,0 +1,14 @@
+name: gemini
+display: Gemini
+adapter_path: GEMINI.md
+memory_dir: .gemini/memory
+log_path: docs/agents/gemini.md
+platform:
+  config_discovery:
+    - GEMINI.md
+  trigger_type: script-only
+  bootstrap_command: "./scripts/collab-init.sh"
+  supports_hooks: false
+notes: |
+  Adapter lives at repo root (GEMINI.md). Memory stays under .gemini/.
+  Antigravity and Gemini CLI both discover GEMINI.md.
