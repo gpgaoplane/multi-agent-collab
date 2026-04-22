@@ -137,32 +137,109 @@ setup_shared() {
 
 # --- Main dispatch ---
 
-if [[ -f ".collab/VERSION" ]]; then
-  echo "collab-init: .collab/VERSION exists — re-init/upgrade path not yet implemented in this task (see Task 16)."
-  exit 1
-fi
+detect_mode() {
+  if [[ ! -f ".collab/VERSION" ]]; then
+    echo "fresh"
+    return
+  fi
+  local installed="$(cat .collab/VERSION)"
+  local shipped="$(cat "$TEMPLATES/collab/VERSION")"
+  if [[ "$installed" == "$shipped" ]]; then
+    echo "re-init"
+  else
+    echo "upgrade"
+  fi
+}
 
-say "Mode: fresh"
+re_init_shared() {
+  say "Re-initializing shared files (idempotent, markers-only)"
+  # Re-emit files that don't exist. For files that do, use merge to refresh
+  # marker sections only.
+  [[ -f .collab/VERSION ]] || copy_file "$TEMPLATES/collab/VERSION" ".collab/VERSION"
+  [[ -f .collab/ACTIVE.md ]] || copy_file "$TEMPLATES/collab/ACTIVE.md" ".collab/ACTIVE.md"
+  [[ -f .collab/INDEX.md ]] || copy_file "$TEMPLATES/collab/INDEX.md" ".collab/INDEX.md"
+  [[ -f .collab/ROUTING.md ]] || copy_file "$TEMPLATES/collab/ROUTING.md" ".collab/ROUTING.md"
+  [[ -f .collab/PROTOCOL.md ]] || copy_file "$TEMPLATES/collab/PROTOCOL.md" ".collab/PROTOCOL.md"
 
-setup_shared
+  # For AI_AGENTS.md, refresh managed sections only.
+  if [[ -f AI_AGENTS.md ]]; then
+    refresh_managed_sections "AI_AGENTS.md" "$TEMPLATES/AI_AGENTS.md"
+  else
+    copy_file "$TEMPLATES/AI_AGENTS.md" "AI_AGENTS.md"
+  fi
 
-# Decide which agents to bootstrap.
+  # Sync descriptors (additive only — never remove user customizations).
+  mkdir -p .collab/agents.d .collab/archive
+  for yml in "$TEMPLATES/agents.d/"*.yml; do
+    local name=$(basename "$yml")
+    [[ -f ".collab/agents.d/$name" ]] || copy_file "$yml" ".collab/agents.d/$name"
+  done
+}
+
+# refresh_managed_sections <target> <template>
+# For every <!-- collab:NAME:start/end --> section in target, replace content
+# with the content from template's same-named section.
+refresh_managed_sections() {
+  local target="$1"
+  local template="$2"
+
+  # Extract section names from template.
+  local sections
+  sections=$(grep -oE '<!-- collab:[a-z-]+:start -->' "$template" | sed -E 's/<!-- collab:([a-z-]+):start -->/\1/' | sort -u)
+
+  for section in $sections; do
+    if merge_has_section "$target" "$section" && merge_has_section "$template" "$section"; then
+      # Extract template content between markers (exclusive).
+      local new_content
+      new_content=$(awk -v start="<!-- collab:${section}:start -->" -v end="<!-- collab:${section}:end -->" '
+        $0 == start { in_sec = 1; next }
+        $0 == end { in_sec = 0; next }
+        in_sec { print }
+      ' "$template")
+      if [[ $DRY_RUN -eq 1 ]]; then
+        say "would refresh section $section in $target"
+      else
+        merge_replace_section "$target" "$section" "$new_content"
+      fi
+    fi
+  done
+}
+
+MODE=$(detect_mode)
+say "Mode: $MODE"
+
+case "$MODE" in
+  fresh)
+    setup_shared
+    ;;
+  re-init)
+    re_init_shared
+    ;;
+  upgrade)
+    echo "Upgrade from $(cat .collab/VERSION) to $(cat "$TEMPLATES/collab/VERSION") — see Task 17 (not yet shipped)."
+    exit 1
+    ;;
+esac
+
+# Agent selection.
 if [[ ${#TARGET_AGENTS[@]} -eq 0 && -z "$ADD_AGENT" ]]; then
-  # Default: all descriptors.
   for yml in ".collab/agents.d/"*.yml; do
+    [[ -f "$yml" ]] || continue
     bootstrap_agent "$yml"
   done
+elif [[ -n "$ADD_AGENT" ]]; then
+  # --add-agent: only this one (Task 18 will add descriptor-creation wizard).
+  bootstrap_agent ".collab/agents.d/${ADD_AGENT}.yml"
 else
   for name in "${TARGET_AGENTS[@]}"; do
     bootstrap_agent ".collab/agents.d/${name}.yml"
   done
 fi
 
-# Register shared files.
 if [[ $DRY_RUN -eq 0 ]]; then
   for f in AI_AGENTS.md .collab/ACTIVE.md .collab/INDEX.md .collab/ROUTING.md .collab/PROTOCOL.md; do
-    bash "$HERE/collab-register.sh" "$f" || true
+    [[ -f "$f" ]] && bash "$HERE/collab-register.sh" "$f" 2>/dev/null || true
   done
 fi
 
-say "Done. Repo bootstrapped at version $(cat .collab/VERSION 2>/dev/null || echo '?')."
+say "Done. Repo at collab version $(cat .collab/VERSION 2>/dev/null || echo '?')."
