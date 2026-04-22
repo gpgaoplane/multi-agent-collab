@@ -54,6 +54,10 @@ copy_file() {
     say "copy $src -> $dest"
     return 0
   fi
+  if [[ -f "$dest" && $FORCE -eq 0 ]]; then
+    say "skip (exists): $dest"
+    return 0
+  fi
   mkdir -p "$(dirname "$dest")"
   cp "$src" "$dest"
 }
@@ -64,6 +68,10 @@ substitute_tokens() {
   local dest="$1"; shift
   if [[ $DRY_RUN -eq 1 ]]; then
     say "render $src -> $dest"
+    return 0
+  fi
+  if [[ -f "$dest" && $FORCE -eq 0 ]]; then
+    say "skip (exists): $dest"
     return 0
   fi
   mkdir -p "$(dirname "$dest")"
@@ -133,6 +141,24 @@ setup_shared() {
     copy_file "$yml" ".collab/agents.d/$(basename "$yml")"
   done
   copy_file "$TEMPLATES/AI_AGENTS.md" "AI_AGENTS.md"
+}
+
+validate_descriptor_exists() {
+  local name="$1"
+  local path=".collab/agents.d/${name}.yml"
+  if [[ ! -f "$path" ]]; then
+    cat >&2 <<EOF
+collab-init: descriptor for agent "$name" not found at $path
+
+To add a new agent, first create the descriptor:
+  cp templates/agents.d/claude.yml .collab/agents.d/$name.yml
+  # then edit to set name/display/adapter_path/memory_dir/log_path
+
+Then re-run:
+  ./scripts/collab-init.sh --add-agent $name
+EOF
+    return 1
+  fi
 }
 
 # --- Main dispatch ---
@@ -239,7 +265,7 @@ if [[ ${#TARGET_AGENTS[@]} -eq 0 && -z "$ADD_AGENT" ]]; then
     bootstrap_agent "$yml"
   done
 elif [[ -n "$ADD_AGENT" ]]; then
-  # --add-agent: only this one (Task 18 will add descriptor-creation wizard).
+  validate_descriptor_exists "$ADD_AGENT"
   bootstrap_agent ".collab/agents.d/${ADD_AGENT}.yml"
 else
   for name in "${TARGET_AGENTS[@]}"; do
