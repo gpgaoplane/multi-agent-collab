@@ -18,6 +18,10 @@ All tests must pass before merge. TDD is required for new scripts.
 - One logical change per commit
 - Reference the task in `docs/plans/*.md` when applicable
 
+## Adding a new script or template
+
+Scripts follow TDD: write the failing test, verify red, implement, verify green, commit. See `docs/plans/2026-04-22-multi-agent-collab-implementation.md` for the pattern. Templates are inert content — cover them via integration tests (`tests/test-collab-init-*.sh`) rather than per-file unit tests.
+
 ## Reporting issues
 
 Open a GitHub issue. For behavior mismatches vs `docs/design.md`, quote the section.

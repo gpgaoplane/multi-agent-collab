@@ -4,7 +4,7 @@ A reusable skill for bootstrapping consistent multi-agent collaboration in any G
 
 ## Status
 
-**In design.** The implementation plan and skill itself are not yet built. See [`docs/design.md`](docs/design.md) for the full design document.
+v0.1.0 — initial release. See [`docs/design.md`](docs/design.md) for the full rationale.
 
 ## What this skill does
 
@@ -26,8 +26,41 @@ Five central mechanisms:
 
 ## Installation
 
-Not yet implemented. Design phase only.
+### In an empty or existing repo
+
+```bash
+git clone https://github.com/gpgaoplane/multi-agent-collab.git /tmp/multi-agent-collab
+cd /path/to/your/repo
+/tmp/multi-agent-collab/scripts/collab-init.sh
+```
+
+Or copy just `scripts/` and `templates/` into your repo and run `./scripts/collab-init.sh`.
+
+### Re-running
+
+Safe. `collab-init.sh` is idempotent. User content outside `<!-- collab:...:start/end -->` markers is preserved.
+
+### Adding a new agent
+
+```bash
+cp templates/agents.d/claude.yml .collab/agents.d/newagent.yml
+# edit fields
+./scripts/collab-init.sh --add-agent newagent
+```
+
+### Flags
+
+- `--agent <name>`     bootstrap a specific agent only
+- `--add-agent <name>` bootstrap a new agent (descriptor must exist)
+- `--dry-run`          preview without writing
+- `--force`            overwrite non-marker content (destructive)
+
+## Testing
+
+```bash
+./tests/run-all.sh
+```
 
 ## License
 
-TBD.
+MIT. See [`LICENSE`](LICENSE).
