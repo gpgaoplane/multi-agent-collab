@@ -216,8 +216,19 @@ case "$MODE" in
     re_init_shared
     ;;
   upgrade)
-    echo "Upgrade from $(cat .collab/VERSION) to $(cat "$TEMPLATES/collab/VERSION") — see Task 17 (not yet shipped)."
-    exit 1
+    installed=$(cat .collab/VERSION)
+    shipped=$(cat "$TEMPLATES/collab/VERSION")
+    say "Upgrading from $installed to $shipped"
+    # v0.1.0 has no prior version, so no migration script. Future upgrades
+    # will invoke scripts/migrations/<from>-to-<to>.sh if present.
+    migration="$HERE/migrations/${installed}-to-${shipped}.sh"
+    if [[ -f "$migration" ]]; then
+      say "Running migration: $migration"
+      [[ $DRY_RUN -eq 1 ]] || bash "$migration"
+    fi
+    # After migration, run re-init to pick up any new template content.
+    re_init_shared
+    [[ $DRY_RUN -eq 1 ]] || echo "$shipped" > .collab/VERSION
     ;;
 esac
 
