@@ -18,3 +18,11 @@ skip-if: "status != active or last-updated <= your watermark"
 ---
 
 <!-- new entries appended below, newest last -->
+
+## Handoff blocks
+
+When you finish a substantive chunk of work and want another agent to take over,
+run `collab-handoff <to-agent>`. It appends a structured block at the end of this
+log with a stable id, what you did, files touched, and the branch state. See
+`docs/handoff-schema.md` for the full format.
+
