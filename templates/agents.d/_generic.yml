@@ -1,0 +1,16 @@
+name: {{AGENT_NAME}}
+display: {{AGENT_DISPLAY}}
+adapter_path: .{{AGENT_NAME}}/{{AGENT_UPPER}}.md
+memory_dir: .{{AGENT_NAME}}/memory
+log_path: docs/agents/{{AGENT_NAME}}.md
+platform:
+  config_discovery:
+    - .{{AGENT_NAME}}/{{AGENT_UPPER}}.md
+    - AGENTS.md
+  trigger_type: script-only
+  bootstrap_command: "./scripts/collab-init.sh"
+  supports_hooks: false
+notes: |
+  Auto-generated descriptor. Edit this file to override adapter_path,
+  memory_dir, or log_path if the agent has non-standard conventions
+  (e.g., Gemini uses GEMINI.md at the repo root, not .gemini/GEMINI.md).
