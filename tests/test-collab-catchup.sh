@@ -76,4 +76,30 @@ set -e
 
 cd "$SKILL_ROOT"
 rm -rf "$TARGET3"
+
+# --- Two-phase round-trip (Task 3) ---
+TARGET4=$(make_tmp_repo)
+cd "$TARGET4"
+bash "$SKILL_ROOT/scripts/collab-init.sh" >/dev/null 2>&1
+STATE4=.claude/memory/state.md
+
+# Roll the watermark back so preview has something to show.
+sed -i 's|Last read INDEX at: (not yet read)|Last read INDEX at: 2020-01-01T00:00:00-00:00|' "$STATE4"
+
+start_test "ack updates watermark to a current ISO timestamp"
+bash "$CATCHUP" ack --agent claude >/dev/null 2>&1
+new_wm=$(grep "Last read INDEX at:" "$STATE4")
+echo "$new_wm" | grep -qE "Last read INDEX at: 20[0-9]{2}-[0-9]{2}-[0-9]{2}T" && ok || fail "watermark not advanced: $new_wm"
+
+start_test "after ack, subsequent preview reports 'up to date'"
+output=$(bash "$CATCHUP" preview --agent claude 2>&1)
+echo "$output" | grep -q "up to date" && ok || fail "expected up-to-date after ack, got: $output"
+
+start_test "ack prints the new watermark value on stdout"
+out=$(bash "$CATCHUP" ack --agent claude 2>&1)
+echo "$out" | grep -qE "^watermark updated: 20[0-9]{2}-[0-9]{2}-[0-9]{2}T" && ok || fail "ack did not echo new watermark: $out"
+
+cd "$SKILL_ROOT"
+rm -rf "$TARGET4"
+
 report
