@@ -45,7 +45,8 @@ output=$( (source "$SKILL_ROOT/scripts/lib/index.sh"; idx_list_with_timestamps "
 echo "$output" | grep -q "LASTUPDATED_MARKER" && ok || fail "returned wrong column: $output"
 echo "$output" | grep -q "STATUS_MARKER" && fail "read status column by mistake" || ok
 
-# Restore INDEX for remaining tests.
+# Restore INDEX for remaining tests (remove first — re-init preserves existing files).
+rm -f .collab/INDEX.md
 bash "$SKILL_ROOT/scripts/collab-init.sh" >/dev/null 2>&1
 
 start_test "catchup with up-to-date watermark prints nothing"
@@ -56,4 +57,23 @@ output=$(bash "$CATCHUP" --agent claude 2>&1)
 
 cd "$SKILL_ROOT"
 rm -rf "$TARGET"
+
+# --- ack error path: missing watermark section ---
+TARGET3=$(make_tmp_repo)
+cd "$TARGET3"
+bash "$SKILL_ROOT/scripts/collab-init.sh" >/dev/null 2>&1
+STATE3=.claude/memory/state.md
+
+start_test "ack errors non-zero when the watermark line is absent from state.md"
+# Remove the watermark line
+awk '!/Last read INDEX at:/' "$STATE3" > /tmp/state-no-wm
+mv /tmp/state-no-wm "$STATE3"
+set +e
+bash "$CATCHUP" ack --agent claude >/dev/null 2>&1
+rc=$?
+set -e
+[[ "$rc" != "0" ]] && ok || fail "ack on missing watermark returned success exit code"
+
+cd "$SKILL_ROOT"
+rm -rf "$TARGET3"
 report

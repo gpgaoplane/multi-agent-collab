@@ -38,6 +38,9 @@ done
 # Locate the agent's state.md via descriptor.
 DESC=".collab/agents.d/${AGENT}.yml"
 [[ -f "$DESC" ]] || { echo "catchup: no descriptor for agent $AGENT" >&2; exit 1; }
+# Naive YAML read — relies on `memory_dir: <unquoted-path>` convention used by
+# all shipped descriptors. If descriptors adopt quoted values or embedded colons,
+# switch to a real YAML parser.
 STATE=$(awk -F': *' '/^memory_dir:/ { print $2 }' "$DESC")
 STATE="${STATE_OVERRIDE:-$STATE/state.md}"
 
@@ -58,30 +61,56 @@ if [[ "$VERB" == "ack" ]]; then
     in_sec && /Last read INDEX at:/ { print "Last read INDEX at: " now; next }
     { print }
   ' "$STATE" > "$tmp"
+  # Verify the rewrite actually produced the new watermark line.
+  if ! grep -q "Last read INDEX at: $NOW" "$tmp"; then
+    rm -f "$tmp"
+    echo "catchup ack: $STATE has no 'Last read INDEX at:' line inside the read-watermark section; cannot update" >&2
+    exit 1
+  fi
   mv "$tmp" "$STATE"
   echo "watermark updated: $NOW"
   exit 0
 fi
 
 # Preview mode: print INDEX rows whose last-updated is newer than WATERMARK.
-# ts_to_epoch normalizes both sides to UTC, so cross-tz authorship is safe.
+
+# Detect GNU date ONCE. macOS without coreutils lacks -d; Git Bash on Windows
+# ships GNU date; Linux is fine. Without GNU date we cannot parse ISO-8601 with
+# tz offsets reliably, so we over-report (print everything) rather than silently
+# under-report (print nothing).
+_date_cmd=""
+if date -d "2020-01-01" +%s >/dev/null 2>&1; then
+  _date_cmd=date
+elif command -v gdate >/dev/null 2>&1 && gdate -d "2020-01-01" +%s >/dev/null 2>&1; then
+  _date_cmd=gdate
+fi
+
+if [[ -z "$_date_cmd" ]]; then
+  echo "catchup: warning — GNU date not available; printing all INDEX entries (install coreutils for delta-read)" >&2
+  # Print all rows — over-report failure mode (agent sees too much, never too little).
+  found=0
+  while IFS=$'\t' read -r path updated; do
+    [[ -z "$path" ]] && continue
+    printf '%s\t%s\n' "$path" "$updated"
+    found=1
+  done < <(idx_list_with_timestamps "$INDEX")
+  [[ $found -eq 0 ]] && echo "up to date"
+  exit 0
+fi
 
 ts_to_epoch() {
-  # Convert ISO-8601 (with tz offset) to UTC epoch seconds.
-  # Returns 0 for "(not yet read)", empty, or unparseable input (safe over-report).
   local ts="$1"
   [[ -z "$ts" || "$ts" == "(not yet read)" ]] && { echo 0; return; }
   local out
-  if out=$(date -d "$ts" +%s 2>/dev/null); then
-    echo "$out"
-  elif command -v gdate >/dev/null 2>&1 && out=$(gdate -d "$ts" +%s 2>/dev/null); then
+  if out=$("$_date_cmd" -d "$ts" +%s 2>/dev/null); then
     echo "$out"
   else
-    echo 0   # degrades to "newer than anything" — never under-reports changes
+    # Parseable by our tool but malformed value — treat row as "newer than
+    # anything" so it's surfaced rather than hidden.
+    echo 9999999999
   fi
 }
 
-# Numeric-only guard for arithmetic compare (any garbage → 0).
 numeric_or_zero() { [[ "$1" =~ ^[0-9]+$ ]] && echo "$1" || echo 0; }
 
 wm_epoch=$(numeric_or_zero "$(ts_to_epoch "$WATERMARK")")
