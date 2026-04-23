@@ -1,0 +1,39 @@
+{
+  "name": "@gpgaoplane/multi-agent-collab",
+  "version": "0.2.0",
+  "description": "Bootstrap multi-agent AI collaboration structure in any git repo",
+  "bin": {
+    "multi-agent-collab": "./bin/cli.js"
+  },
+  "files": [
+    "bin/",
+    "scripts/",
+    "templates/",
+    "docs/design.md",
+    "SKILL.md",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gpgaoplane/multi-agent-collab.git"
+  },
+  "homepage": "https://github.com/gpgaoplane/multi-agent-collab#readme",
+  "bugs": "https://github.com/gpgaoplane/multi-agent-collab/issues",
+  "license": "MIT",
+  "keywords": [
+    "agents",
+    "claude",
+    "codex",
+    "gemini",
+    "opencode",
+    "multi-agent",
+    "collaboration",
+    "skill",
+    "bootstrap",
+    "agents-md"
+  ]
+}
