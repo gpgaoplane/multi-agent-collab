@@ -129,6 +129,40 @@ bootstrap_agent() {
   fi
 }
 
+inject_agents_md_section() {
+  local target="AGENTS.md"
+  local template="$TEMPLATES/AGENTS.md"
+
+  if [[ $DRY_RUN -eq 1 ]]; then
+    if [[ -f "$target" ]]; then
+      say "would refresh/append managed section in AGENTS.md"
+    else
+      say "would create AGENTS.md from template"
+    fi
+    return 0
+  fi
+
+  if [[ ! -f "$target" ]]; then
+    cp "$template" "$target"
+    return 0
+  fi
+
+  if merge_has_section "$target" "agents-md"; then
+    local new_content
+    new_content=$(awk -v start="<!-- collab:agents-md:start -->" -v end="<!-- collab:agents-md:end -->" '
+      $0 == start { in_sec = 1; next }
+      $0 == end { in_sec = 0; next }
+      in_sec { print }
+    ' "$template")
+    merge_replace_section "$target" "agents-md" "$new_content"
+  else
+    {
+      echo
+      cat "$template"
+    } >> "$target"
+  fi
+}
+
 setup_shared() {
   say "Setting up shared files"
   copy_file "$TEMPLATES/collab/VERSION" ".collab/VERSION"
@@ -138,9 +172,12 @@ setup_shared() {
   copy_file "$TEMPLATES/collab/PROTOCOL.md" ".collab/PROTOCOL.md"
   mkdir -p ".collab/agents.d" ".collab/archive"
   for yml in "$TEMPLATES/agents.d/"*.yml; do
+    # Skip internal templates (underscore-prefixed) — not real shipped descriptors.
+    [[ "$(basename "$yml")" == _* ]] && continue
     copy_file "$yml" ".collab/agents.d/$(basename "$yml")"
   done
   copy_file "$TEMPLATES/AI_AGENTS.md" "AI_AGENTS.md"
+  inject_agents_md_section
 }
 
 validate_descriptor_exists() {
@@ -194,10 +231,14 @@ re_init_shared() {
     copy_file "$TEMPLATES/AI_AGENTS.md" "AI_AGENTS.md"
   fi
 
+  # AGENTS.md — always ensure managed section present/current.
+  inject_agents_md_section
+
   # Sync descriptors (additive only — never remove user customizations).
   mkdir -p .collab/agents.d .collab/archive
   for yml in "$TEMPLATES/agents.d/"*.yml; do
     local name=$(basename "$yml")
+    [[ "$name" == _* ]] && continue
     [[ -f ".collab/agents.d/$name" ]] || copy_file "$yml" ".collab/agents.d/$name"
   done
 }
@@ -274,7 +315,8 @@ else
 fi
 
 if [[ $DRY_RUN -eq 0 ]]; then
-  for f in AI_AGENTS.md .collab/ACTIVE.md .collab/INDEX.md .collab/ROUTING.md .collab/PROTOCOL.md; do
+  # AGENTS.md has no YAML frontmatter (standard format), so collab-register will soft-fail; that's OK.
+  for f in AI_AGENTS.md AGENTS.md .collab/ACTIVE.md .collab/INDEX.md .collab/ROUTING.md .collab/PROTOCOL.md; do
     [[ -f "$f" ]] && bash "$HERE/collab-register.sh" "$f" 2>/dev/null || true
   done
 fi
