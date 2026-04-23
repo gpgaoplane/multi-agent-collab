@@ -23,11 +23,15 @@ start_test "presence end removes the row"
 bash "$PRESENCE" end --agent claude --session abc123 >/dev/null 2>&1
 grep -q "| claude | abc123 |" .collab/ACTIVE.md && fail "row still present after end" || ok
 
-start_test "presence end of missing row is no-op"
-bash "$PRESENCE" end --agent claude --session doesnotexist >/dev/null 2>&1 && ok || fail "end errored on missing row"
+start_test "presence end of missing row is true no-op (file byte-identical)"
+cp .collab/ACTIVE.md /tmp/active-before
+bash "$PRESENCE" end --agent claude --session doesnotexist >/dev/null 2>&1
+diff -q /tmp/active-before .collab/ACTIVE.md >/dev/null && ok || fail "end mutated ACTIVE.md on missing row"
+rm -f /tmp/active-before
 
-start_test "missing --agent errors out"
-bash "$PRESENCE" start --session abc 2>/dev/null && fail "should have errored" || ok
+start_test "missing --agent errors with a helpful message"
+err=$(bash "$PRESENCE" start --session abc 2>&1 >/dev/null; echo "exit=$?")
+echo "$err" | grep -q "agent is required" && echo "$err" | grep -q "exit=1" && ok || fail "wrong error path: $err"
 
 cd "$SKILL_ROOT"
 rm -rf "$TARGET"

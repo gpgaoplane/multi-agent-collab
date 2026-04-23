@@ -67,7 +67,11 @@ filtered=$(printf '%s\n' "$current" | awk -v a="$AGENT" -v s="$SESSION" '
 case "$verb" in
   start)
     row="| $AGENT | $SESSION | $BRANCH | $NOW |"
-    new=$(printf '%s\n%s' "$filtered" "$row")
+    if [[ -z "$filtered" ]]; then
+      new="$row"
+    else
+      new=$(printf '%s\n%s' "$filtered" "$row")
+    fi
     write_section "$new"
     ;;
   end)
