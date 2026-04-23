@@ -82,6 +82,26 @@ idx_upsert() {
   mv "$tmp" "$file"
 }
 
+# idx_list_with_timestamps <index> — emit tab-separated path\tlast-updated
+# for every row in the INDEX table.
+idx_list_with_timestamps() {
+  local index="$1"
+  awk '
+    BEGIN { FS=" *\\| *"; in_table=0 }
+    /^\| *path *\|/ { in_table=1; next }
+    /^\|[-| ]+\|?$/ { next }
+    in_table && /^\|/ {
+      # With FS=" *\\| *", row "| a | b | c | d | e |" splits to 7 fields:
+      # "", a, b, c, d, e, "". Canonical column order (templates/collab/INDEX.md):
+      #   path | type | owner | status | last-updated
+      # → $2=path, $6=last-updated.
+      path=$2; updated=$6
+      gsub(/^ *| *$/, "", path); gsub(/^ *| *$/, "", updated)
+      if (path != "" && path != "path") printf "%s\t%s\n", path, updated
+    }
+  ' "$index"
+}
+
 # idx_remove <index-file> <path>
 idx_remove() {
   local file="$1"
