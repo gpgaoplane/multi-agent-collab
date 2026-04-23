@@ -16,12 +16,17 @@ DRY_RUN=0
 FORCE=0
 TARGET_AGENTS=()
 ADD_AGENT=""
+JOIN_AGENT=""
 
 usage() {
   cat <<'EOF'
 Usage: collab-init.sh [options]
   --agent <name>       Bootstrap only the named agent (repeatable)
-  --add-agent <name>   Add a new agent descriptor and bootstrap only its files
+  --add-agent <name>   Add a new agent; requires descriptor to already exist
+  --join <name>        Add an agent by name. Three-tier lookup:
+                         1. existing user descriptor at .collab/agents.d/<name>.yml
+                         2. shipped descriptor in templates/agents.d/<name>.yml
+                         3. generic template (auto-renders defaults)
   --dry-run            Print actions without writing
   --force              Overwrite non-marker content (destructive)
   -h, --help           Show this help
@@ -32,6 +37,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --agent) TARGET_AGENTS+=("$2"); shift 2 ;;
     --add-agent) ADD_AGENT="$2"; shift 2 ;;
+    --join) JOIN_AGENT="$2"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
     --force) FORCE=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -180,6 +186,44 @@ setup_shared() {
   inject_agents_md_section
 }
 
+join_agent() {
+  local name="$1"
+  local upper
+  upper=$(echo "$name" | tr '[:lower:]' '[:upper:]')
+  local display="$(echo "${name:0:1}" | tr '[:lower:]' '[:upper:]')${name:1}"
+
+  local shipped="$TEMPLATES/agents.d/${name}.yml"
+  local user=".collab/agents.d/${name}.yml"
+  local generic="$TEMPLATES/agents.d/_generic.yml"
+
+  if [[ -f "$user" ]]; then
+    say "join: using existing descriptor at $user"
+  elif [[ -f "$shipped" ]]; then
+    say "join: installing shipped descriptor for $name"
+    if [[ $DRY_RUN -eq 0 ]]; then
+      mkdir -p ".collab/agents.d"
+      cp "$shipped" "$user"
+    fi
+  else
+    say "join: rendering generic descriptor for unknown agent $name"
+    if [[ ! -f "$generic" ]]; then
+      echo "join: generic template missing at $generic" >&2
+      return 1
+    fi
+    if [[ $DRY_RUN -eq 0 ]]; then
+      mkdir -p ".collab/agents.d"
+      local content
+      content=$(cat "$generic")
+      content="${content//\{\{AGENT_NAME\}\}/$name}"
+      content="${content//\{\{AGENT_DISPLAY\}\}/$display}"
+      content="${content//\{\{AGENT_UPPER\}\}/$upper}"
+      printf '%s\n' "$content" > "$user"
+    fi
+  fi
+
+  bootstrap_agent "$user"
+}
+
 validate_descriptor_exists() {
   local name="$1"
   local path=".collab/agents.d/${name}.yml"
@@ -300,14 +344,18 @@ case "$MODE" in
 esac
 
 # Agent selection.
-if [[ ${#TARGET_AGENTS[@]} -eq 0 && -z "$ADD_AGENT" ]]; then
-  for yml in ".collab/agents.d/"*.yml; do
-    [[ -f "$yml" ]] || continue
-    bootstrap_agent "$yml"
-  done
+if [[ -n "$JOIN_AGENT" ]]; then
+  join_agent "$JOIN_AGENT"
 elif [[ -n "$ADD_AGENT" ]]; then
   validate_descriptor_exists "$ADD_AGENT"
   bootstrap_agent ".collab/agents.d/${ADD_AGENT}.yml"
+elif [[ ${#TARGET_AGENTS[@]} -eq 0 ]]; then
+  for yml in ".collab/agents.d/"*.yml; do
+    [[ -f "$yml" ]] || continue
+    # Skip internal underscore-prefixed templates if any leaked in.
+    [[ "$(basename "$yml")" == _* ]] && continue
+    bootstrap_agent "$yml"
+  done
 else
   for name in "${TARGET_AGENTS[@]}"; do
     bootstrap_agent ".collab/agents.d/${name}.yml"
