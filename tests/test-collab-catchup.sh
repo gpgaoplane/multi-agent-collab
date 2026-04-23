@@ -86,10 +86,12 @@ STATE4=.claude/memory/state.md
 # Roll the watermark back so preview has something to show.
 sed -i 's|Last read INDEX at: (not yet read)|Last read INDEX at: 2020-01-01T00:00:00-00:00|' "$STATE4"
 
-start_test "ack updates watermark to a current ISO timestamp"
+start_test "ack updates watermark to a value different from the pre-ack timestamp"
+pre_wm=$(grep "Last read INDEX at:" "$STATE4")
 bash "$CATCHUP" ack --agent claude >/dev/null 2>&1
 new_wm=$(grep "Last read INDEX at:" "$STATE4")
-echo "$new_wm" | grep -qE "Last read INDEX at: 20[0-9]{2}-[0-9]{2}-[0-9]{2}T" && ok || fail "watermark not advanced: $new_wm"
+# Must differ from the seeded 2020 value AND look like an ISO-8601 timestamp.
+[[ "$new_wm" != "$pre_wm" ]] && echo "$new_wm" | grep -qE "Last read INDEX at: 20[0-9]{2}-[0-9]{2}-[0-9]{2}T" && ok || fail "watermark did not advance: pre=$pre_wm post=$new_wm"
 
 start_test "after ack, subsequent preview reports 'up to date'"
 output=$(bash "$CATCHUP" preview --agent claude 2>&1)
