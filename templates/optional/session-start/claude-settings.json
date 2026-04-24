@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "git fetch --all --quiet 2>/dev/null; branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo ''); [ -n \"$branch\" ] && git log --oneline origin/$branch..HEAD 2>/dev/null | head -5 || true"
+          }
+        ]
+      }
+    ]
+  }
+}
