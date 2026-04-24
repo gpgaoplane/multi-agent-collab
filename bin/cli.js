@@ -9,12 +9,15 @@ const fs = require('fs');
 const USAGE = `Usage: multi-agent-collab <command> [args]
 
 Commands:
-  init                  Bootstrap multi-agent collab in the current repo
-  join <name>           Add a new agent (claude/codex/gemini or any name)
-  check                 Audit INDEX vs filesystem
-  archive <path>        Archive a file
-  register <path>       Register a file in INDEX
-  --help, -h            Show this help
+  init                     Bootstrap multi-agent collab in the current repo
+  join <name>              Add a new agent (claude/codex/gemini or any name)
+  check                    Audit INDEX vs filesystem
+  archive <path>           Archive a file
+  register <path>          Register a file in INDEX
+  presence start|end ...   Manage ACTIVE.md rows
+  catchup ...              Delta-read INDEX / surface handoffs
+  handoff <to> --from ...  Write a handoff block to your work log
+  --help, -h               Show this help
 
 Requires bash. On Windows, install Git for Windows (https://git-scm.com/download/win)
 or use WSL.`;
@@ -65,6 +68,18 @@ function main() {
       }
       scriptPath = path.join(scriptsDir, 'collab-register.sh');
       scriptArgs = [rest[0]];
+      break;
+    case 'presence':
+      scriptPath = path.join(scriptsDir, 'collab-presence.sh');
+      scriptArgs = rest;
+      break;
+    case 'catchup':
+      scriptPath = path.join(scriptsDir, 'collab-catchup.sh');
+      scriptArgs = rest;
+      break;
+    case 'handoff':
+      scriptPath = path.join(scriptsDir, 'collab-handoff.sh');
+      scriptArgs = rest;
       break;
     default:
       console.error(`Unknown command: ${cmd}`);
