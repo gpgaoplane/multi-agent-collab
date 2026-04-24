@@ -48,9 +48,50 @@ done
 
 if [[ $mismatches -eq 0 ]]; then
   echo "OK: INDEX and filesystem aligned"
-  exit 0
+  audit_rc=0
 else
   echo
   echo "$mismatches mismatch(es) found"
-  exit 1
+  audit_rc=1
 fi
+
+# --- Update advisory (non-fatal; skipped in CI / with update_channel:none) ---
+check_for_update() {
+  [[ "${CI:-}" == "true" ]] && return 0
+  [[ -f .collab/config.yml ]] || return 0
+  grep -qE '^update_channel:[[:space:]]*none' .collab/config.yml && return 0
+
+  local cache=".collab/.update-cache"
+  # Cache valid for 24h (applies to both successful and failed checks).
+  if [[ -f "$cache" ]]; then
+    local age=$(( $(date +%s) - $(stat -c%Y "$cache" 2>/dev/null || stat -f%m "$cache" 2>/dev/null || echo 0) ))
+    [[ $age -lt 86400 ]] && return 0
+  fi
+
+  local url="${COLLAB_UPDATE_URL:-https://registry.npmjs.org/@gpgaoplane/multi-agent-collab}"
+  local latest
+  if [[ "$url" == file://* ]]; then
+    latest=$(cat "${url#file://}" 2>/dev/null | grep -oE '"latest":"[^"]+"' | head -1 | cut -d'"' -f4)
+  else
+    latest=$(curl -sS --max-time 2 "$url" 2>/dev/null | grep -oE '"latest":"[^"]+"' | head -1 | cut -d'"' -f4)
+  fi
+
+  if [[ -z "$latest" ]]; then
+    # Negative cache so 24h cooldown applies to failures too (no hammering on
+    # flaky networks / offline).
+    echo "check-failed: $(date +%s)" > "$cache"
+    return 0
+  fi
+
+  echo "$latest" > "$cache"
+  local installed=$(cat .collab/VERSION 2>/dev/null || echo "")
+  if [[ -n "$installed" && "$latest" != "$installed" ]]; then
+    echo
+    echo "advisory: newer version $latest available (installed $installed). Upgrade with:"
+    echo "  npx @gpgaoplane/multi-agent-collab@$latest init"
+  fi
+}
+
+check_for_update || true
+
+exit $audit_rc
