@@ -104,4 +104,27 @@ echo "$out" | grep -qE "^watermark updated: 20[0-9]{2}-[0-9]{2}-[0-9]{2}T" && ok
 cd "$SKILL_ROOT"
 rm -rf "$TARGET4"
 
+# --- Receiver surfacing (Task 6) ---
+TARGET5=$(make_tmp_repo)
+cd "$TARGET5"
+bash "$SKILL_ROOT/scripts/collab-init.sh" >/dev/null 2>&1
+
+bash "$SKILL_ROOT/scripts/collab-handoff.sh" codex --from claude --message "refactor done" >/dev/null 2>&1
+
+start_test "catchup --handoff surfaces block targeting the caller"
+out=$(bash "$CATCHUP" preview --agent codex --handoff 2>&1)
+echo "$out" | grep -q "Handoff → codex" && ok || fail "no handoff surfaced: $out"
+
+start_test "catchup --handoff prints sender name"
+echo "$out" | grep -q "from.* claude" && ok || fail "sender not shown: $out"
+
+start_test "catchup --handoff skips closed blocks"
+id=$(echo "$out" | grep -oE 'handoff-id.* `[^`]+' | head -1 | sed 's/.*`//' | tr -d '`')
+bash "$SKILL_ROOT/scripts/collab-handoff.sh" close "$id" --from claude >/dev/null 2>&1
+out2=$(bash "$CATCHUP" preview --agent codex --handoff 2>&1)
+echo "$out2" | grep -q "no open handoffs" && ok || fail "closed handoff still surfaced: $out2"
+
+cd "$SKILL_ROOT"
+rm -rf "$TARGET5"
+
 report

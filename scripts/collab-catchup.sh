@@ -7,12 +7,13 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 source "$HERE/lib/index.sh"
 
 INDEX=".collab/INDEX.md"
-AGENT=""; VERB="preview"; STATE_OVERRIDE=""
+AGENT=""; VERB="preview"; STATE_OVERRIDE=""; HANDOFF_MODE=0
 
 usage() {
   cat <<'EOF'
 Usage:
   collab-catchup [preview] --agent <name>         # default — print newer entries
+  collab-catchup preview --agent <name> --handoff # list open handoffs targeting agent
   collab-catchup ack --agent <name>               # commit current time as watermark
 EOF
 }
@@ -27,6 +28,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --agent) AGENT="$2"; shift 2 ;;
     --state) STATE_OVERRIDE="$2"; shift 2 ;;
+    --handoff) HANDOFF_MODE=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "catchup: unknown arg: $1" >&2; exit 1 ;;
   esac
@@ -51,6 +53,37 @@ WATERMARK=$(awk '
   /<!-- section:read-watermark:end -->/ { in_sec = 0 }
   in_sec && /Last read INDEX at:/ { sub(/^Last read INDEX at: */, ""); print; exit }
 ' "$STATE")
+
+# Handoff receiver mode: scan all agent logs for open handoffs targeting this agent.
+if [[ "$VERB" == "preview" && $HANDOFF_MODE -eq 1 ]]; then
+  found=0
+  for desc in .collab/agents.d/*.yml; do
+    [[ -f "$desc" ]] || continue
+    base=$(basename "$desc")
+    [[ "$base" == _* ]] && continue
+    log=$(awk -F': *' '/^log_path:/ { print $2 }' "$desc")
+    [[ -f "$log" ]] || continue
+
+    if awk -v me="$AGENT" '
+      /<!-- collab:handoff:start id=/ { in_blk = 1; buf = ""; to = ""; st = "" }
+      in_blk { buf = buf $0 "\n" }
+      in_blk && /^- \*\*to:\*\*/    { to = $0 }
+      in_blk && /^- \*\*status:\*\*/ { st = $0 }
+      /<!-- collab:handoff:end -->/ {
+        if ((to ~ (" " me "$") || to ~ / any$/) && st ~ / open$/) {
+          print buf; print "---"
+          any_found = 1
+        }
+        in_blk = 0
+      }
+      END { exit any_found ? 0 : 1 }
+    ' "$log"; then
+      found=1
+    fi
+  done
+  [[ $found -eq 1 ]] || echo "no open handoffs for agent $AGENT"
+  exit 0
+fi
 
 if [[ "$VERB" == "ack" ]]; then
   NOW=$(bash "$HERE/collab-now.sh")
