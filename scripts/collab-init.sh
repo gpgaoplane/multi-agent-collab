@@ -17,6 +17,7 @@ FORCE=0
 TARGET_AGENTS=()
 ADD_AGENT=""
 JOIN_AGENT=""
+INSTALL_HOOKS=0
 
 usage() {
   cat <<'EOF'
@@ -29,6 +30,7 @@ Usage: collab-init.sh [options]
                          3. generic template (auto-renders defaults)
   --dry-run            Print actions without writing
   --force              Overwrite non-marker content (destructive)
+  --install-hooks      Install collab pre-commit hook at .git/hooks/pre-commit
   -h, --help           Show this help
 EOF
 }
@@ -40,6 +42,7 @@ while [[ $# -gt 0 ]]; do
     --join) JOIN_AGENT="$2"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
     --force) FORCE=1; shift ;;
+    --install-hooks) INSTALL_HOOKS=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown arg: $1" >&2; usage; exit 1 ;;
   esac
@@ -169,6 +172,56 @@ inject_agents_md_section() {
   fi
 }
 
+install_pre_commit_hook() {
+  local src="$SKILL_ROOT/scripts/hooks/pre-commit"
+  local dest=".git/hooks/pre-commit"
+
+  if [[ ! -d .git/hooks ]]; then
+    say "install-hooks: no .git/hooks dir (is this a git repo?)" >&2
+    return 0
+  fi
+
+  if [[ $DRY_RUN -eq 1 ]]; then
+    say "would install $src -> $dest"
+    return 0
+  fi
+
+  # Preserve existing hook if the installed one is not already ours.
+  # Detection uses the `# collab:managed-hook` sentinel — substring matches on
+  # script paths are unreliable (can collide with user scripts that mention
+  # collab-verify-receipt for any reason).
+  if [[ -f "$dest" ]] && ! grep -q "^# collab:managed-hook" "$dest"; then
+    mv "$dest" ".git/hooks/pre-commit.local"
+    say "preserved existing pre-commit as .git/hooks/pre-commit.local"
+  fi
+
+  cp "$src" "$dest"
+  chmod +x "$dest"
+  # If a .local exists, append a single delegation block so it still runs.
+  # The block is marked with `# collab:delegation` so test suites can count
+  # occurrences (exactly one expected after any number of re-runs).
+  if [[ -f .git/hooks/pre-commit.local ]]; then
+    cat >> "$dest" <<'EOF'
+
+# collab:delegation — invoke user's pre-existing hook, if any.
+if [[ -x .git/hooks/pre-commit.local ]]; then
+  .git/hooks/pre-commit.local "$@" || exit $?
+fi
+EOF
+  fi
+  say "installed collab pre-commit hook at $dest"
+}
+
+install_config() {
+  local src="$TEMPLATES/config.yml"
+  local dest=".collab/config.yml"
+  [[ -f "$dest" ]] && return 0
+  if [[ $DRY_RUN -eq 0 ]]; then
+    cp "$src" "$dest"
+  fi
+  say "installed default config at $dest"
+}
+
 setup_shared() {
   say "Setting up shared files"
   copy_file "$TEMPLATES/collab/VERSION" ".collab/VERSION"
@@ -184,6 +237,7 @@ setup_shared() {
   done
   copy_file "$TEMPLATES/AI_AGENTS.md" "AI_AGENTS.md"
   inject_agents_md_section
+  install_config
 }
 
 join_agent() {
@@ -285,6 +339,8 @@ re_init_shared() {
     [[ "$name" == _* ]] && continue
     [[ -f ".collab/agents.d/$name" ]] || copy_file "$yml" ".collab/agents.d/$name"
   done
+
+  install_config
 }
 
 # refresh_managed_sections <target> <template>
@@ -367,6 +423,10 @@ if [[ $DRY_RUN -eq 0 ]]; then
   for f in AI_AGENTS.md AGENTS.md .collab/ACTIVE.md .collab/INDEX.md .collab/ROUTING.md .collab/PROTOCOL.md; do
     [[ -f "$f" ]] && bash "$HERE/collab-register.sh" "$f" 2>/dev/null || true
   done
+fi
+
+if [[ $INSTALL_HOOKS -eq 1 ]]; then
+  install_pre_commit_hook
 fi
 
 say "Done. Repo at collab version $(cat .collab/VERSION 2>/dev/null || echo '?')."
