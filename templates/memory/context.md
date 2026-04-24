@@ -12,5 +12,5 @@ skip-if: "status != active or last-updated <= your watermark"
 Append new invariants and project truths below, each with a dated ISO-8601 header.
 
 <!-- section:entries:start -->
-(none yet)
+_No context entries yet — {{AGENT_DISPLAY}} has not completed a substantive task in this repo since onboarding. Populated on first end-of-task Receipt._
 <!-- section:entries:end -->

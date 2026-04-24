@@ -17,7 +17,7 @@ skip-if: "status != active or last-updated <= your watermark"
 <!-- section:current-state:end -->
 
 <!-- section:next-steps:start -->
-(none)
+_No next steps queued — {{AGENT_DISPLAY}} has not started planning work in this repo yet._
 <!-- section:next-steps:end -->
 
 <!-- section:open-questions:start -->

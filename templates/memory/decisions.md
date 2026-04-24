@@ -21,5 +21,5 @@ Append new decisions below. Format:
 ```
 
 <!-- section:entries:start -->
-(none yet)
+_No durable decisions recorded yet for this project. Appended by {{AGENT_DISPLAY}} when a design choice is made between alternatives._
 <!-- section:entries:end -->

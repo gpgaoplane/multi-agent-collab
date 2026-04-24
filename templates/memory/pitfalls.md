@@ -20,5 +20,5 @@ Append new pitfalls below. Format:
 ```
 
 <!-- section:entries:start -->
-(none yet)
+_No pitfalls documented yet. Appended by {{AGENT_DISPLAY}} when a recurring bug, gotcha, or workaround is discovered._
 <!-- section:entries:end -->
