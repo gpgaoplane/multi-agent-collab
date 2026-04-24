@@ -386,14 +386,27 @@ case "$MODE" in
     installed=$(cat .collab/VERSION)
     shipped=$(cat "$TEMPLATES/collab/VERSION")
     say "Upgrading from $installed to $shipped"
-    # v0.1.0 has no prior version, so no migration script. Future upgrades
-    # will invoke scripts/migrations/<from>-to-<to>.sh if present.
-    migration="$HERE/migrations/${installed}-to-${shipped}.sh"
-    if [[ -f "$migration" ]]; then
-      say "Running migration: $migration"
-      [[ $DRY_RUN -eq 1 ]] || bash "$migration"
+
+    # Chain migrations by walking shipped migration scripts. Filename order
+    # works because versions are zero-padded semver-like (0.1.0, 0.2.0, 0.3.0).
+    from_version="$installed"
+    for script in "$HERE/migrations/"*-to-*.sh; do
+      [[ -f "$script" ]] || continue
+      base=$(basename "$script" .sh)            # e.g. 0.1.0-to-0.2.0
+      src="${base%-to-*}"                       # 0.1.0
+      dst="${base##*-to-}"                      # 0.2.0
+      # Run only forward-chain migrations starting at our current from_version
+      # and not exceeding shipped.
+      if [[ "$src" == "$from_version" && ! "$dst" > "$shipped" ]]; then
+        say "Running migration: $(basename "$script")"
+        [[ $DRY_RUN -eq 1 ]] || bash "$script"
+        from_version="$dst"
+      fi
+    done
+    if [[ "$from_version" != "$shipped" ]]; then
+      say "warning: no migration path from $installed to $shipped; applying re-init only"
     fi
-    # After migration, run re-init to pick up any new template content.
+
     re_init_shared
     [[ $DRY_RUN -eq 1 ]] || echo "$shipped" > .collab/VERSION
     ;;

@@ -22,9 +22,10 @@ rm -f "$TMP/AGENTS.md"
 # Run v0.2.0 upgrade.
 (cd "$TMP" && bash scripts/collab-init.sh) >/dev/null 2>&1
 
-start_test "upgrade bumps .collab/VERSION to 0.2.0"
+start_test "upgrade bumps .collab/VERSION to shipped version"
 v=$(cat "$TMP/.collab/VERSION" | tr -d '[:space:]')
-assert_eq "0.2.0" "$v"
+shipped=$(cat "$SKILL_ROOT/templates/collab/VERSION" | tr -d '[:space:]')
+assert_eq "$shipped" "$v"
 
 start_test "upgrade creates AGENTS.md"
 assert_file_exists "$TMP/AGENTS.md"
