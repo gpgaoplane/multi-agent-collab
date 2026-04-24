@@ -4,7 +4,18 @@ A reusable skill for bootstrapping consistent multi-agent collaboration in any G
 
 ## Status
 
-v0.2.0 — cross-agent distribution. See [`docs/design.md`](docs/design.md) for the full rationale.
+v0.3.0 — cross-agent handoff and enforcement. See [`docs/design.md`](docs/design.md) for the full rationale and [`CHANGELOG.md`](CHANGELOG.md) for release history.
+
+## What's new in v0.3.0
+
+- **Cross-agent handoff** — `collab-handoff <to-agent>` writes a structured handoff block with chain support (`A→B→C→A`).
+- **Delta-read on demand** — `collab-catchup` previews files newer than your watermark; `ack` commits it (two-phase keeps it honest).
+- **Presence board is writable** — `collab-presence start|end` manages `.collab/ACTIVE.md` rows. Handoff auto-removes the sender on completion. Full "load-bearing" adoption depends on per-agent session-start hooks (optional snippets shipped under `templates/optional/`).
+- **Receipt enforcement** — opt-in portable pre-commit hook via `collab-init --install-hooks`. `.collab/config.yml: strict: true` turns warnings into blocks.
+- **Update advisory** — `collab-check` reports when a newer npm version exists (silent in CI, cache 24h).
+- **Session-start snippets** (optional) — per-agent hooks surface remote drift automatically.
+- **Visible empty-state seeds** — empty memory files no longer look like broken installs.
+- **Auto-publish** — tag `v*` → GitHub Actions publishes to npm.
 
 ## What this skill does
 
@@ -73,13 +84,13 @@ npx @gpgaoplane/multi-agent-collab join <agent-name>
 
 For agents with non-standard conventions (e.g., adapter file at repo root instead of `.{name}/`), edit the auto-generated descriptor at `.collab/agents.d/<name>.yml` then re-run `join`.
 
-## Upgrading from v0.1.0
+## Upgrading
 
 ```bash
-npx @gpgaoplane/multi-agent-collab@0.2.0 init
+npx @gpgaoplane/multi-agent-collab init
 ```
 
-The bootstrap detects the previous version and runs `scripts/migrations/0.1.0-to-0.2.0.sh` automatically. User content outside marker sections is preserved.
+The bootstrap detects the previous version and runs the migration chain automatically (v0.1.0 installs will run both `0.1.0-to-0.2.0.sh` and `0.2.0-to-0.3.0.sh`; v0.2.0 installs run only the latter). User content outside marker sections is preserved.
 
 ## Flags (all channels)
 
@@ -95,6 +106,14 @@ Underlying bash script accepts also:
 - `--add-agent <name>` — add an agent whose descriptor already exists (v0.1.0-compatible)
 - `--dry-run` — preview without writing
 - `--force` — overwrite non-marker content (destructive)
+
+### Cross-agent workflow commands
+
+- `handoff <to-agent> --from <name> [--message ...] [--files ...]` — sender writes a handoff block
+- `handoff close <id> --from <name>` — receiver marks block done
+- `catchup preview --agent <name> [--handoff]` — see what changed, or surface open handoffs
+- `catchup ack --agent <name>` — commit current time as INDEX watermark
+- `presence start|end --agent <name>` — manage ACTIVE.md presence rows
 
 ## Requirements
 
