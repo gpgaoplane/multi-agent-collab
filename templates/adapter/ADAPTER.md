@@ -23,3 +23,23 @@ Read `AI_AGENTS.md` at the repo root before starting any work session. It covers
 <!-- collab:platform-notes:start -->
 Add platform-specific pointers here (hook locations, slash commands, global vs project memory separation, etc.).
 <!-- collab:platform-notes:end -->
+
+## Handoff and pickup
+
+When {{AGENT_DISPLAY}} finishes a handoff-worthy chunk (e.g., branch complete, major refactor done, cross-cutting change that needs review), write a handoff block:
+
+```
+./scripts/collab-handoff.sh <to-agent> --from {{AGENT_NAME}} --message "..." --files "a b c"
+```
+
+When the user says "take the baton" or "pick up handoff," run:
+
+```
+./scripts/collab-catchup.sh preview --agent {{AGENT_NAME}} --handoff
+```
+
+…and follow the instructions in the surfaced handoff block. After validation, close the handoff:
+
+```
+./scripts/collab-handoff.sh close <id> --from {{AGENT_NAME}}
+```

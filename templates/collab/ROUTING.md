@@ -23,5 +23,6 @@ A substantive task typically hits 3–6 rows. Hit every row that applies.
 | 8 | Tracked project task changed status | `docs/STATUS.md` — update managed section |
 | 9 | Created any new document | Frontmatter added + `.collab/INDEX.md` — append row |
 | 10 | Cross-agent risk to flag | `docs/agents/<you>.md` — explicit `Watch out:` block |
+| 11 | Handing off work to another agent | `docs/agents/<you>.md` — append handoff block via `collab-handoff`; `.collab/ACTIVE.md` row drops automatically |
 
 Core rule: **hit every row that applies, not the "most important" one.** Over-update beats under-update. Stale is fixable; missing is silent data loss.

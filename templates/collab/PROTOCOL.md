@@ -47,3 +47,29 @@ Updates: none applicable (<short reason>)
 ```
 
 The Protocol still runs — the short form is an assertion that the walk was performed and produced no required writes.
+
+## Handoff rituals
+
+When you finish a substantive chunk of work and another agent should validate, extend, or take over:
+
+```bash
+./scripts/collab-handoff.sh <to-agent> --from <your-name> --message "..." --files "a b c"
+```
+
+This writes a handoff block to your work log, drops your row from `.collab/ACTIVE.md`, and bumps the INDEX so receivers see the delta. Chain across agents with `--parent-id <previous-id>`.
+
+At session start, run:
+
+```bash
+./scripts/collab-catchup.sh preview --agent <your-name> --handoff
+```
+
+to surface any open handoff targeting you. When you finish validating, close it:
+
+```bash
+./scripts/collab-handoff.sh close <id> --from <your-name>
+```
+
+**User vocabulary.** The human can say "take the baton" or "pick up handoff" to any agent — these phrases are a universal contract across Claude / Codex / Gemini / others. The agent should respond by running the catchup command above.
+
+See `docs/handoff-schema.md` for the full block format and state machine.
