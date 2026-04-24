@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# collab:managed-hook v0.3.0
+# Pre-commit hook installed by `collab-init --install-hooks`.
+# For every staged file under docs/agents/<name>.md, run collab-verify-receipt.
+# Soft-warns by default; exits non-zero only when .collab/config.yml: strict: true.
+# DO NOT EDIT — edit scripts/hooks/pre-commit in the skill source instead.
+# The `collab:managed-hook` sentinel above is used to detect our own hook on
+# re-install; any change to that first-line sentinel will break idempotency.
+set -euo pipefail
+
+STRICT=0
+if [[ -f .collab/config.yml ]] && grep -qE '^[[:space:]]*strict:[[:space:]]*true' .collab/config.yml; then
+  STRICT=1
+fi
+
+fails=0
+while IFS= read -r path; do
+  [[ -z "$path" ]] && continue
+  case "$path" in
+    docs/agents/*.md) ;;
+    *) continue ;;
+  esac
+  if ! bash scripts/collab-verify-receipt.sh "$path" 2>/dev/null; then
+    echo "pre-commit: $path lacks a Task Receipt block." >&2
+    fails=$((fails + 1))
+  fi
+done < <(git diff --cached --name-only)
+
+if [[ $fails -gt 0 ]]; then
+  if [[ $STRICT -eq 1 ]]; then
+    echo >&2 "pre-commit: strict mode, blocking commit. See .collab/PROTOCOL.md."
+    exit 1
+  else
+    echo >&2 "pre-commit: warning, proceeding anyway (set .collab/config.yml strict: true to block)."
+  fi
+fi
+exit 0
