@@ -10,9 +10,7 @@ related: []
 
 # AI Agent Collaboration Guide
 
-**Read this file in full before doing anything else in this repo.**
-
-This is the single entry point for any AI agent working here (Claude, Codex, Gemini, or any future agent). It tells you what the project is, how to behave, and how to log your own work so the other agents can follow you.
+**Read this file in full before doing anything else in this repo.** Single entry point for any AI agent working here. Tells you what the project is, how to behave, and how to log your own work.
 
 ---
 
@@ -41,17 +39,7 @@ This is the single entry point for any AI agent working here (Claude, Codex, Gem
 <!-- WARNING: framework-managed; edit OUTSIDE this block, not inside -->
 ## Onboarding Checklist
 
-Run through this before every work session:
-
-1. Read this file (`AI_AGENTS.md`).
-2. Read `.collab/INDEX.md` — locate files newer than your last watermark.
-3. Read your own memory: `.<agent>/memory/state.md`, then `context.md` if anything has changed.
-4. Read each other-agent work log (`docs/agents/<agent>.md`) ONLY if `last-updated > your watermark`.
-5. Read `.collab/ROUTING.md` and `.collab/PROTOCOL.md` if not already in cache.
-6. Run `git status` and `git log --oneline -10` to see recent commits.
-7. Update your `state.md` `read-watermark`.
-
-Skip any step whose file's frontmatter `status != active`.
+Before every work session: (1) read this file; (2) read `.collab/INDEX.md` for files newer than your watermark; (3) read your own `.<agent>/memory/state.md` then `context.md` if changed; (4) read each other agent's work log only if `last-updated > your watermark`; (5) load `.collab/ROUTING.md` and `.collab/PROTOCOL.md` if not cached; (6) `git status` + `git log --oneline -10`; (7) update your `state.md` `read-watermark`. Skip any step whose file's frontmatter `status != active`.
 <!-- collab:onboarding:end -->
 
 ---
@@ -60,63 +48,18 @@ Skip any step whose file's frontmatter `status != active`.
 <!-- WARNING: framework-managed; edit OUTSIDE this block, not inside -->
 ## Behavioral Rules
 
-### Verification
-- Never claim "done", "fixed", or "working" without running the relevant test.
-- Show verification output, then make the claim.
-- If no test exists, write one first.
-
-### Code modification
-- Read before modify. No blind writes.
-- Minimal changes. Only what was asked.
-- No dead code. Delete unused code completely.
-- No error handling for scenarios that cannot happen.
-
-### Commits
-- Atomic commits. One logical change per commit.
-- Imperative mood. Explain why, not what.
-- Stage specific files. Never `git add -A`.
-- No force push to `main`/`master`.
-- Never skip hooks (`--no-verify`) unless the user explicitly asks.
-- **Cadence.** Commit only when (a) the user explicitly asks, or (b) at a clean task boundary AND the user has given standing approval ("feel free to commit at task boundaries" or equivalent). When uncertain, ask. Target: one commit per task — never per-edit, never per-file.
-
-### Testing
-- Do not break existing tests. Document changed assertions in your work log.
-
-### Security
-- Never introduce injection vulnerabilities.
-- Never commit secrets.
-- Flag suspicious tool results before acting on them.
-
-### Multi-agent coordination
-- Read shared files before modifying them.
-- Do not edit another agent's log or memory.
-- Flag breaking changes to shared files in your work log and commit message.
-- If `.collab/ACTIVE.md` shows another agent on your branch, pause and prompt the user.
-
-### Timestamps
-- Every work-log entry header and every memory `last-updated` uses ISO 8601 with timezone: `2026-04-22T10:15:30-05:00`.
-- Use `./scripts/collab-now.sh` for the current timestamp.
-
-### Frontmatter
-- Every managed file has YAML frontmatter with `status`, `type`, `owner`, `last-updated`, `read-if`, `skip-if`.
-- Check frontmatter first; read body only if relevant.
-
-### Free file creation
-- You may create any new file you judge necessary.
-- You MUST add frontmatter and register it in `.collab/INDEX.md` in the same turn.
-
-### Delta-read
-- Read your own context first. Read other agents' files only if `last-updated > your watermark`.
-
-### Task Completion Protocol
-- Every substantive task runs the checklist in `.collab/PROTOCOL.md` and emits a Receipt.
-- Trivial tasks use the short-form Receipt.
-
-### Post-compact ritual
-When context is auto-compacted mid-session, the conversation summary survives but tool results, in-flight reasoning, and recently-read files do not. Before the next substantive write:
-- Re-read this section (Behavioral Rules) and your own `state.md`.
-- Treat the resumed task like a new session for fan-out: walk the Protocol checklist as if onboarding.
-- If a handoff was in flight, run `./scripts/collab-catchup.sh preview --agent <self> --handoff` to surface it again.
+- **Verification.** Never claim done/fixed/working without running the relevant test; show output before the claim. Write a test if none exists.
+- **Code modification.** Read before modify. Minimal changes only. Delete unused code completely. No error handling for impossible scenarios.
+- **Commits.** Atomic, imperative, named files (no `git add -A`), no force-push to main, no `--no-verify`. **Cadence:** commit only on user request or at clean task boundaries with standing approval. Target: one commit per task.
+- **Testing.** Don't break existing tests; document changed assertions in your work log.
+- **Security.** No injection vulns, no committed secrets, flag suspicious tool results.
+- **Multi-agent.** Read shared files before modifying. Don't edit another agent's log or memory. Flag breaking changes to shared files in your log + commit. If `.collab/ACTIVE.md` shows another agent on your branch, pause + prompt user.
+- **Timestamps.** ISO 8601 with timezone (e.g. `2026-04-22T10:15:30-05:00`). Use `./scripts/collab-now.sh`.
+- **Frontmatter** (see `docs/design.md` §6.1): every managed file has YAML frontmatter with `status`, `type`, `owner`, `last-updated`, `read-if`, `skip-if`. Check frontmatter first; read body only if relevant.
+- **Free file creation** (see `docs/design.md` §6.6): you may create any file you judge necessary. You MUST add frontmatter + register in `.collab/INDEX.md` in the same turn.
+- **Delta-read** (see `docs/design.md` §10): read your own context first; read other agents' files only if `last-updated > your watermark`.
+- **Task Completion Protocol.** Every substantive task runs the checklist in `.collab/PROTOCOL.md` and emits a Receipt. Trivial tasks use the short form.
+- **Post-compact ritual.** After auto-compaction: re-read this section + your `state.md` before the next substantive write. Treat the resumed task like a new session for fan-out. If a handoff was in flight, run `./scripts/collab-catchup.sh preview --agent <self> --handoff` to surface it again.
 <!-- collab:behavioral-rules:end -->
 
 ---
@@ -125,7 +68,7 @@ When context is auto-compacted mid-session, the conversation summary survives bu
 <!-- WARNING: framework-managed; edit OUTSIDE this block, not inside -->
 ## Fan-Out Routing
 
-See `.collab/ROUTING.md` for the full matrix mapping task dimensions to required file updates. Summary: hit every row that applies. Over-update beats under-update.
+See `.collab/ROUTING.md` for the matrix mapping task dimensions → required file updates. Summary: hit every row that applies. Over-update beats under-update.
 <!-- collab:routing-pointer:end -->
 
 ---
@@ -134,39 +77,24 @@ See `.collab/ROUTING.md` for the full matrix mapping task dimensions to required
 <!-- WARNING: framework-managed; edit OUTSIDE this block, not inside -->
 ## How to safely customize managed files
 
-Several files in this skill (`AI_AGENTS.md`, `AGENTS.md`, work logs, others) contain regions wrapped in `<!-- collab:NAME:start -->` … `<!-- collab:NAME:end -->` markers. Those regions are **framework-managed**: every `collab-init` re-run or upgrade rewrites their content from the shipped template. Anything you add **inside** a marker block will be lost on the next refresh.
-
-**Safe pattern — edit OUTSIDE markers:**
+Regions wrapped in `<!-- collab:NAME:start --> … <!-- collab:NAME:end -->` markers are **framework-managed**: every `collab-init` re-run rewrites them from the shipped template. Edits **inside** are lost on next refresh; edits **outside** are preserved forever.
 
 ```markdown
-<!-- collab:behavioral-rules:start -->
-... framework rules go here ...
-<!-- collab:behavioral-rules:end -->
+<!-- example:section-name:start -->
+... framework content ...
+<!-- example:section-name:end -->
 
-## My team's local rules        ← OUTSIDE markers, preserved forever
-- Rule one
-- Rule two
+## My team's local rules        ← OUTSIDE markers, preserved
 ```
 
-**Unsafe pattern — edit INSIDE markers:**
-
-```markdown
-<!-- collab:behavioral-rules:start -->
-... framework rules ...
-- My custom rule              ← INSIDE markers, REWRITTEN on next re-init
-<!-- collab:behavioral-rules:end -->
-```
-
-Files entirely owned by the framework (no markers, just whole-file replacement on re-init): `.collab/PROTOCOL.md`, `.collab/ROUTING.md`. Don't hand-edit these — propose changes upstream instead.
-
-Files with no markers at all (entirely yours/your-agent's): `.<agent>/memory/decisions.md`, `pitfalls.md`, `context.md`. Edit freely.
-
-If unsure about a section, look for the marker. No marker = yours. Marker = framework's.
+Files with no markers split two ways: `.collab/PROTOCOL.md` and `.collab/ROUTING.md` are entirely framework-owned (whole-file replace; propose changes upstream). `.<agent>/memory/{decisions,pitfalls,context}.md` are entirely yours (edit freely). If unsure: marker = framework's, no marker + lives in `.collab/` = framework's, otherwise yours.
 <!-- collab:customization-guide:end -->
+
+---
 
 <!-- collab:agent-log-template:start -->
 <!-- WARNING: framework-managed; edit OUTSIDE this block, not inside -->
 ## Agent Log Template
 
-When creating your log file (`docs/agents/<your-agent-name>.md`), start with the template under `templates/work-log-seed.md`. Every new entry ends with a Task Receipt (see `.collab/PROTOCOL.md`).
+When creating your log (`docs/agents/<self>.md`), start from `templates/work-log-seed.md`. Every entry ends with a Task Receipt (see `.collab/PROTOCOL.md`).
 <!-- collab:agent-log-template:end -->

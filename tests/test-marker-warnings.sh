@@ -65,14 +65,14 @@ grep -qF "$WARNING" "$TMP/AI_AGENTS.md" && ok || fail "warning lost on re-init"
 start_test "AI_AGENTS.md template has customization-guide marker"
 grep -q "<!-- collab:customization-guide:start -->" "$SKILL_ROOT/templates/AI_AGENTS.md" && ok || fail "customization-guide marker missing"
 
-start_test "customization guide explains safe pattern (edit OUTSIDE)"
-sed -n '/collab:customization-guide:start/,/collab:customization-guide:end/p' "$SKILL_ROOT/templates/AI_AGENTS.md" | grep -q "Safe pattern" && ok || fail "safe pattern not in guide"
+start_test "customization guide teaches edit-OUTSIDE-markers convention"
+sed -n '/collab:customization-guide:start/,/collab:customization-guide:end/p' "$SKILL_ROOT/templates/AI_AGENTS.md" | grep -q "OUTSIDE markers" && ok || fail "edit-outside teaching missing from guide"
 
-start_test "customization guide shows unsafe pattern example"
-sed -n '/collab:customization-guide:start/,/collab:customization-guide:end/p' "$SKILL_ROOT/templates/AI_AGENTS.md" | grep -q "Unsafe pattern" && ok || fail "unsafe pattern example missing"
+start_test "customization guide includes a code-block example"
+sed -n '/collab:customization-guide:start/,/collab:customization-guide:end/p' "$SKILL_ROOT/templates/AI_AGENTS.md" | grep -q '^```markdown' && ok || fail "code-block example missing"
 
-start_test "customization guide explains files with no markers (entirely yours)"
-sed -n '/collab:customization-guide:start/,/collab:customization-guide:end/p' "$SKILL_ROOT/templates/AI_AGENTS.md" | grep -q "decisions.md" && ok || fail "no-marker files explanation missing"
+start_test "customization guide identifies user-owned no-marker files"
+sed -n '/collab:customization-guide:start/,/collab:customization-guide:end/p' "$SKILL_ROOT/templates/AI_AGENTS.md" | grep -E "decisions|pitfalls|context" >/dev/null && ok || fail "user-owned no-marker files explanation missing"
 
 start_test "fresh AI_AGENTS.md ships customization guide"
 grep -q "<!-- collab:customization-guide:start -->" "$TMP/AI_AGENTS.md" && ok || fail "customization-guide missing in fresh install"
