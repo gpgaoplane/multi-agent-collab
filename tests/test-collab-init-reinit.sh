@@ -43,4 +43,14 @@ assert_eq "1" "$count"
 start_test "re-init still passes collab-check"
 (cd "$TMP" && bash scripts/collab-check.sh) && ok || fail "check failed after re-init"
 
+# v0.4.0 Group D: re-init refreshes the commit-cadence rule into stale AI_AGENTS.md
+start_test "re-init re-introduces commit Cadence rule when stripped from existing AI_AGENTS.md"
+sed -i '/Cadence/d' "$TMP/AI_AGENTS.md"
+if grep -q "Cadence" "$TMP/AI_AGENTS.md"; then
+  fail "precondition: Cadence should be removed for this test"
+else
+  (cd "$TMP" && bash scripts/collab-init.sh) >/dev/null 2>&1
+  grep -q "Cadence" "$TMP/AI_AGENTS.md" && ok || fail "re-init did not re-inject Cadence rule"
+fi
+
 report

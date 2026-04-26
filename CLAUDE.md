@@ -1,5 +1,11 @@
 # multi-agent-collab — Project Instructions
 
+## Permission to execute (HARD)
+
+- **Default to asking, not doing.** Outside of an explicit auto-accept/permissive mode (Auto Mode, `--dangerously-skip-permissions`, `Shift+Tab` auto-accept, or a per-session "go" from the user), always ask the user before moving on to execute the next task. Do not chain group-level tasks in sequence without per-group confirmation.
+- **The exception is when the user has explicitly said to run autonomously** (e.g. "go", "run through the plan", "while I sleep"). In that case proceed and document assumptions.
+- **When in doubt, ask.** A 30-second confirmation beats a 5-minute rework.
+
 ## Testing rules (HARD)
 
 - **Never run the full test suite for single-file changes.** `tests/run-all.sh` takes 60–90s; running it after edits that can't possibly affect other tests is waste. Run only the affected test file.

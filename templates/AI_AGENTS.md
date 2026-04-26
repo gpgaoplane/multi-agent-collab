@@ -74,6 +74,7 @@ Skip any step whose file's frontmatter `status != active`.
 - Stage specific files. Never `git add -A`.
 - No force push to `main`/`master`.
 - Never skip hooks (`--no-verify`) unless the user explicitly asks.
+- **Cadence.** Commit only when (a) the user explicitly asks, or (b) at a clean task boundary AND the user has given standing approval ("feel free to commit at task boundaries" or equivalent). When uncertain, ask. Target: one commit per task — never per-edit, never per-file.
 
 ### Testing
 - Do not break existing tests. Document changed assertions in your work log.

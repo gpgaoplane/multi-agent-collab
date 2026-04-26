@@ -37,6 +37,10 @@ Updates fanned out this task:
 Missing / intentionally skipped: <reason or "none">
 ```
 
+## Before committing
+
+Commit only when the user explicitly asks, or at a clean task boundary with the user's standing approval. When in doubt, ask. Target: one commit per task — never per-edit. See `AI_AGENTS.md` `behavioral-rules > Commits > Cadence`.
+
 ## Trivial-task short form
 
 If the task hit 0 or 1 fan-out rows (read-only exploration, clarification, lookup):
