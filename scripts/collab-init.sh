@@ -16,6 +16,7 @@ DRY_RUN=0
 FORCE=0
 FORCE_DIRTY=0
 NO_BACKUP=0
+DIFF_MODE=0
 RESTORE_ID=""
 TARGET_AGENTS=()
 ADD_AGENT=""
@@ -42,6 +43,8 @@ Usage: collab-init.sh [options]
   --restore <id>       Restore framework-managed files from a backup directory
                        (use 'latest' for the most recent backup; or pass a
                        specific timestamp like 0.3.0-to-0.4.0-20260426150405)
+  --diff               In upgrade mode: apply migrations, print per-file diffs,
+                       then restore from backup. Repo state is unchanged after.
   -h, --help           Show this help
 EOF
 }
@@ -58,6 +61,7 @@ while [[ $# -gt 0 ]]; do
     --force-dirty) FORCE_DIRTY=1; shift ;;
     --no-backup) NO_BACKUP=1; shift ;;
     --restore) RESTORE_ID="$2"; shift 2 ;;
+    --diff) DIFF_MODE=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown arg: $1" >&2; usage; exit 1 ;;
   esac
@@ -695,8 +699,11 @@ EOF
     say "Upgrading from $installed to $shipped"
 
     # M3: auto-backup before any migration runs. Disable with --no-backup.
-    if [[ $NO_BACKUP -eq 0 && $DRY_RUN -eq 0 ]]; then
+    # --diff forces a backup ON regardless of --no-backup, since it's the
+    # mechanism we use to compute and revert diffs.
+    if [[ ($NO_BACKUP -eq 0 || $DIFF_MODE -eq 1) && $DRY_RUN -eq 0 ]]; then
       do_backup "$installed" "$shipped"
+      diff_backup_dir=$(ls -1dt .collab/backup/${installed}-to-${shipped}-* 2>/dev/null | head -1)
     fi
 
     # Capture migration output for UPGRADE_NOTES.md while still streaming to
@@ -779,6 +786,67 @@ EOF
           bootstrap_agent ".collab/agents.d/${name}.yml"
         done
       fi
+    fi
+
+    # M4: --diff mode. Print per-file diffs from backup vs current live state,
+    # then restore from backup so the repo ends up unchanged.
+    if [[ $DIFF_MODE -eq 1 && -n "${diff_backup_dir:-}" ]]; then
+      echo
+      echo "=== Migration diff ($installed -> $shipped) ==="
+      echo "(would-be changes; the repo will be restored to its pre-upgrade state below)"
+      echo
+      changed=0
+      # Disable pipefail/errexit inside the diff loops — diff exits non-zero
+      # whenever files differ (which is what we WANT to surface), and we don't
+      # want that propagating through pipes or terminating the script.
+      set +e
+      while IFS= read -r -d '' src; do
+        rel="${src#$diff_backup_dir/}"
+        [[ "$rel" == "RESTORE.md" ]] && continue
+        if [[ -f "$rel" ]]; then
+          diff -q "$src" "$rel" >/dev/null 2>&1
+          if [[ $? -ne 0 ]]; then
+            echo "--- $rel (before / v$installed)"
+            echo "+++ $rel (after / v$shipped)"
+            diff -u "$src" "$rel" | tail -n +3
+            echo
+            changed=$((changed + 1))
+          fi
+        else
+          echo "DELETED: $rel"
+          changed=$((changed + 1))
+        fi
+      done < <(find "$diff_backup_dir" -type f -print0)
+
+      # Files that exist in live but not in the backup = newly added by migration.
+      while IFS= read -r -d '' new_file; do
+        rel="${new_file#./}"
+        case "$rel" in
+          .collab/backup/*) continue ;;
+          .collab/archive/*) continue ;;
+          .git/*) continue ;;
+          scripts/*) continue ;;
+          templates/*) continue ;;
+        esac
+        if [[ -f "$rel" && ! -f "$diff_backup_dir/$rel" ]]; then
+          echo "NEW: $rel"
+          changed=$((changed + 1))
+        fi
+      done < <(find . -type f -print0 2>/dev/null)
+
+      set -e   # restore strict mode after the diff loops
+      if [[ $changed -eq 0 ]]; then
+        echo "(no file-level changes)"
+      fi
+      echo
+      echo "=== End diff. Restoring repo from backup. ==="
+
+      # Restore from this specific backup, then prune it (it served its purpose).
+      do_restore "${diff_backup_dir##*/}"
+      rm -rf "$diff_backup_dir"
+      # Also remove UPGRADE_NOTES.md that was created by this dry-run upgrade.
+      rm -f .collab/UPGRADE_NOTES.md
+      exit 0
     fi
     ;;
 esac
