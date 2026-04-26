@@ -14,6 +14,19 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
+echo
+echo ">>> Upgrade summary (v0.3.0 → v0.4.0):"
+echo ">>>   - BREAKING: collab-init bootstraps only the calling agent."
+echo ">>>     Detection: --agent flag > \$COLLAB_AGENT > env probe > hard-fail."
+echo ">>>   - AI_AGENTS.md Current Adapters table is now dynamic."
+echo ">>>   - Work-log rotation via collab-rotate-log.sh (300-line default)."
+echo ">>>   - collab-handoff pickup verb for receivers."
+echo ">>>   - User vocabulary expanded: sender + receiver phrases in PROTOCOL.md."
+echo ">>>   - Post-compact ritual added to AI_AGENTS.md and AGENTS.md."
+echo ">>>   - This migration may prompt to prune unused agents (interactive)."
+echo ">>>   - See CHANGELOG.md for full release notes."
+echo
+
 is_seed_only() {
   local log="$1"
   [[ -f "$log" ]] || return 0

@@ -18,6 +18,7 @@ TARGET_AGENTS=()
 ADD_AGENT=""
 JOIN_AGENT=""
 INSTALL_HOOKS=0
+ACK_UPGRADE=0
 RESOLVED_AGENTS=()
 
 usage() {
@@ -32,6 +33,7 @@ Usage: collab-init.sh [options]
   --dry-run            Print actions without writing
   --force              Overwrite non-marker content (destructive)
   --install-hooks      Install collab pre-commit hook at .git/hooks/pre-commit
+  --ack-upgrade        Archive .collab/UPGRADE_NOTES.md (run after reading post-upgrade ritual)
   -h, --help           Show this help
 EOF
 }
@@ -44,6 +46,7 @@ while [[ $# -gt 0 ]]; do
     --dry-run) DRY_RUN=1; shift ;;
     --force) FORCE=1; shift ;;
     --install-hooks) INSTALL_HOOKS=1; shift ;;
+    --ack-upgrade) ACK_UPGRADE=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown arg: $1" >&2; usage; exit 1 ;;
   esac
@@ -467,6 +470,26 @@ refresh_managed_sections() {
   done
 }
 
+# --ack-upgrade: archive the transient UPGRADE_NOTES.md and exit. Idempotent —
+# if the file is already absent or already archived, this is a no-op.
+if [[ $ACK_UPGRADE -eq 1 ]]; then
+  if [[ -f .collab/UPGRADE_NOTES.md ]]; then
+    mkdir -p .collab/archive
+    archived=".collab/archive/UPGRADE_NOTES-$(date +%Y%m%d).md"
+    if [[ -f "$archived" ]]; then
+      # Concurrent ack from a sibling session — file was already archived.
+      rm -f .collab/UPGRADE_NOTES.md
+      echo "ack-upgrade: UPGRADE_NOTES.md already archived; removed live copy."
+    else
+      mv .collab/UPGRADE_NOTES.md "$archived"
+      echo "ack-upgrade: archived UPGRADE_NOTES.md to $archived."
+    fi
+  else
+    echo "ack-upgrade: no UPGRADE_NOTES.md present; nothing to do."
+  fi
+  exit 0
+fi
+
 MODE=$(detect_mode)
 say "Mode: $MODE"
 
@@ -512,6 +535,14 @@ case "$MODE" in
     shipped=$(cat "$TEMPLATES/collab/VERSION")
     say "Upgrading from $installed to $shipped"
 
+    # Capture migration output for UPGRADE_NOTES.md while still streaming to
+    # stdout. The notes file becomes a transient artifact the next agent reads
+    # to learn what changed.
+    upgrade_log=""
+    if [[ $DRY_RUN -eq 0 ]]; then
+      upgrade_log=$(mktemp)
+    fi
+
     # Chain migrations by walking shipped migration scripts. Filename order
     # works because versions are zero-padded semver-like (0.1.0, 0.2.0, 0.3.0).
     from_version="$installed"
@@ -524,7 +555,13 @@ case "$MODE" in
       # and not exceeding shipped.
       if [[ "$src" == "$from_version" && ! "$dst" > "$shipped" ]]; then
         say "Running migration: $(basename "$script")"
-        [[ $DRY_RUN -eq 1 ]] || bash "$script"
+        if [[ $DRY_RUN -eq 1 ]]; then
+          :
+        elif [[ -n "$upgrade_log" ]]; then
+          bash "$script" 2>&1 | tee -a "$upgrade_log"
+        else
+          bash "$script"
+        fi
         from_version="$dst"
       fi
     done
@@ -534,6 +571,38 @@ case "$MODE" in
 
     re_init_shared
     [[ $DRY_RUN -eq 1 ]] || echo "$shipped" > .collab/VERSION
+
+    # Write UPGRADE_NOTES.md so the first agent to enter the next session sees
+    # what changed. Marked status: transient — agents read it, run the
+    # post-upgrade ritual (re-read AI_AGENTS.md), then ack via --ack-upgrade.
+    if [[ $DRY_RUN -eq 0 && -n "$upgrade_log" && -s "$upgrade_log" ]]; then
+      now=$(bash "$HERE/collab-now.sh")
+      {
+        printf -- '---\n'
+        printf 'status: transient\n'
+        printf 'type: upgrade-notes\n'
+        printf 'owner: shared\n'
+        printf 'last-updated: %s\n' "$now"
+        printf 'read-if: "you are starting a session and have not yet acked this upgrade"\n'
+        printf 'skip-if: "you already ran collab-init --ack-upgrade after reading this"\n'
+        printf -- '---\n\n'
+        printf '# Upgrade Notes — %s → %s\n\n' "$installed" "$shipped"
+        printf 'Run on %s.\n\n' "$now"
+        printf '## What changed\n\n'
+        # Strip ANSI escapes if any leaked in; preserve summary lines verbatim.
+        cat "$upgrade_log"
+        printf '\n## Post-upgrade ritual\n\n'
+        printf 'Before your next substantive write:\n\n'
+        printf '1. Re-read `AI_AGENTS.md` `behavioral-rules` (rules may have changed).\n'
+        printf '2. Skim the `>>> Upgrade summary:` blocks above for breaking changes.\n'
+        printf '3. Read `CHANGELOG.md` if a summary references it.\n'
+        printf '4. Once done, ack: `bash scripts/collab-init.sh --ack-upgrade`\n'
+        printf '   (this archives this file so other agents do not re-process it).\n'
+      } > .collab/UPGRADE_NOTES.md
+      rm -f "$upgrade_log"
+      bash "$HERE/collab-register.sh" .collab/UPGRADE_NOTES.md >/dev/null 2>&1 || true
+      say "wrote .collab/UPGRADE_NOTES.md (run --ack-upgrade after reading)"
+    fi
     if [[ -z "$JOIN_AGENT" && -z "$ADD_AGENT" ]]; then
       if [[ ${#TARGET_AGENTS[@]} -eq 0 ]]; then
         for yml in ".collab/agents.d/"*.yml; do

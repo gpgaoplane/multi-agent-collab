@@ -97,3 +97,14 @@ Agent action: run `./scripts/collab-catchup.sh preview --agent <self> --handoff`
 **Group handoffs.** Use `to: any` to target any available agent — `./scripts/collab-handoff.sh any --from <self>` writes a block visible to every agent's `--handoff` preview. The first agent to acknowledge owns it.
 
 See `docs/handoff-schema.md` for the full block format and state machine.
+
+## Post-upgrade ritual
+
+When the framework is upgraded (a `collab-init` run produced `.collab/UPGRADE_NOTES.md`), the first agent to enter the next session must:
+
+1. Read `.collab/UPGRADE_NOTES.md` in full — it contains the `>>> Upgrade summary:` from each migration that ran, plus a pointer to CHANGELOG.md.
+2. Re-read `AI_AGENTS.md` `behavioral-rules`. Behavior contracts may have changed. **Ignore your watermark for this one read** — read the body, not just the frontmatter.
+3. If a summary calls out a breaking change, propagate any required state changes to your own `state.md` before the next substantive write.
+4. Acknowledge with `bash scripts/collab-init.sh --ack-upgrade` to archive `UPGRADE_NOTES.md`. This signals other agents that the upgrade has been absorbed; they do not need to re-process it.
+
+`collab-check` surfaces the presence of `UPGRADE_NOTES.md` at the top of its output as a reminder.

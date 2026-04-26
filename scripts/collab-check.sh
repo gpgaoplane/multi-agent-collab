@@ -13,6 +13,14 @@ if [[ ! -f "$INDEX" ]]; then
   exit 2
 fi
 
+# Surface UPGRADE_NOTES.md at the top so it's the first thing the agent sees.
+if [[ -f .collab/UPGRADE_NOTES.md ]]; then
+  echo "ATTENTION: .collab/UPGRADE_NOTES.md is present (unacked)."
+  echo "  Read it, run the post-upgrade ritual (see PROTOCOL.md), then:"
+  echo "    bash scripts/collab-init.sh --ack-upgrade"
+  echo
+fi
+
 mismatches=0
 
 # 1. INDEX references → filesystem check

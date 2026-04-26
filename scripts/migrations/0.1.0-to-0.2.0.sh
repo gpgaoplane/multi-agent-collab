@@ -12,6 +12,12 @@ TEMPLATES="$SKILL_ROOT/templates"
 source "$SCRIPTS/lib/merge.sh"
 
 echo "Migrating v0.1.0 → v0.2.0..."
+echo
+echo ">>> Upgrade summary (v0.1.0 → v0.2.0):"
+echo ">>>   - Adds AGENTS.md front door for cross-agent discovery."
+echo ">>>   - No template content changes inside existing markers."
+echo ">>>   - See CHANGELOG.md for full release notes."
+echo
 
 # Self-contained inject helper (kept separate from collab-init's copy so the
 # migration can be re-run manually without sourcing the whole init script).
