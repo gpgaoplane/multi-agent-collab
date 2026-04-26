@@ -13,6 +13,15 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
+SKILL_ROOT="$(cd "$HERE/../.." && pwd)"
+source "$SKILL_ROOT/scripts/lib/migration-log.sh"
+
+# BEFORE state
+descriptor_count=$(ls .collab/agents.d/*.yml 2>/dev/null | grep -v '/_' | wc -l | tr -d ' ')
+mlog_action "BEFORE: ${descriptor_count} agent descriptor(s) installed"
+
+# Emit AFTER stats on any exit path (nothing-to-prune, non-interactive, interactive).
+trap '_after=$(ls .collab/agents.d/*.yml 2>/dev/null | grep -v "/_" | wc -l | tr -d " "); mlog_action "AFTER: ${_after} agent descriptor(s) installed"' EXIT
 
 echo
 echo ">>> Upgrade summary (v0.3.0 → v0.4.0):"
@@ -67,6 +76,7 @@ remove_agent() {
   fi
 
   echo "migration: removed agent $name (adapter, memory, log, descriptor, INDEX rows)"
+  mlog_action "removed agent: $name"
 }
 
 prompt_yes_no() {

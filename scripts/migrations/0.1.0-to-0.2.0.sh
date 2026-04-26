@@ -10,8 +10,11 @@ SKILL_ROOT="$(cd "$SCRIPTS/.." && pwd)"
 TEMPLATES="$SKILL_ROOT/templates"
 
 source "$SCRIPTS/lib/merge.sh"
+source "$SCRIPTS/lib/migration-log.sh"
 
 echo "Migrating v0.1.0 → v0.2.0..."
+
+mlog_file_state "BEFORE" "AGENTS.md"
 echo
 echo ">>> Upgrade summary (v0.1.0 → v0.2.0):"
 echo ">>>   - Adds AGENTS.md front door for cross-agent discovery."
@@ -50,5 +53,7 @@ inject_agents_md_section() {
 }
 
 inject_agents_md_section
+
+mlog_file_state "AFTER" "AGENTS.md"
 
 echo "Migration 0.1.0 → 0.2.0 complete."

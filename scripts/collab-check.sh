@@ -37,13 +37,14 @@ scan_dirs=(.claude .codex .gemini docs/agents .collab)
 for d in "${scan_dirs[@]}"; do
   [[ -d "$d" ]] || continue
   while IFS= read -r -d '' path; do
-    # Skip archive directory and .gitkeep
+    # Normalize: strip leading ./ (find may or may not prepend it depending on
+    # the search-root form). Then skip archive/backup trees and .gitkeep.
+    path="${path#./}"
     case "$path" in
-      ./.collab/archive/*) continue ;;
+      .collab/archive/*) continue ;;
+      .collab/backup/*) continue ;;
       */.gitkeep) continue ;;
     esac
-    # Normalize: strip leading ./
-    path="${path#./}"
     if ! idx_get_row "$INDEX" "$path" | grep -q .; then
       # Only flag files with frontmatter (managed)
       if fm_has_frontmatter "$path"; then

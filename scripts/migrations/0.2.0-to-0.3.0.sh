@@ -7,6 +7,10 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 SKILL_ROOT="$(cd "$HERE/../.." && pwd)"
 TEMPLATES="$SKILL_ROOT/templates"
 
+source "$SKILL_ROOT/scripts/lib/migration-log.sh"
+
+mlog_file_state "BEFORE" ".collab/config.yml"
+
 echo
 echo ">>> Upgrade summary (v0.2.0 → v0.3.0):"
 echo ">>>   - Adds .collab/config.yml (strict + update_channel keys)."
@@ -25,5 +29,7 @@ fi
 
 # Hooks are opt-in via --install-hooks; migration does not auto-install them.
 # Empty-state seeds are refreshed by re-init's refresh_managed_sections path.
+
+mlog_file_state "AFTER" ".collab/config.yml"
 
 echo "migration 0.2.0 -> 0.3.0 complete"
