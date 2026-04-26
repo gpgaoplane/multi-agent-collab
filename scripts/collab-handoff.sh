@@ -14,6 +14,7 @@ usage() {
   cat <<'EOF'
 Usage:
   collab-handoff <to-agent> --from <name> [--message "..."] [--parent-id <id>] [--files "a b c"]
+  collab-handoff pickup <id> --from <name>
   collab-handoff close  <id> --from <name>
   collab-handoff cancel <id> --from <name>
 EOF
@@ -23,6 +24,7 @@ EOF
 
 VERB="create"
 case "$1" in
+  pickup) VERB="pickup"; ID="$2"; shift 2 ;;
   close|cancel) VERB="$1"; ID="$2"; shift 2 ;;
   -h|--help) usage; exit 0 ;;
   *) TO_AGENT="$1"; shift ;;
@@ -89,19 +91,104 @@ case "$VERB" in
 
   close|cancel)
     newstatus=$([ "$VERB" = "close" ] && echo "closed" || echo "cancelled")
+    # Find the block across all agent logs (receivers may close handoffs that
+    # live in the sender's log; the --from flag identifies the actor, not
+    # the host log).
+    target_log=""
+    for desc in .collab/agents.d/*.yml; do
+      [[ -f "$desc" ]] || continue
+      base=$(basename "$desc")
+      [[ "$base" == _* ]] && continue
+      candidate=$(awk -F': *' '/^log_path:/ { print $2 }' "$desc")
+      [[ -f "$candidate" ]] || continue
+      if grep -q "<!-- collab:handoff:start id=$ID -->" "$candidate"; then
+        target_log="$candidate"
+        break
+      fi
+    done
+    if [[ -z "$target_log" ]]; then
+      echo "handoff: id $ID not found in any agent log" >&2
+      exit 1
+    fi
     tmp=$(mktemp)
     awk -v id="$ID" -v ns="$newstatus" '
       $0 ~ "<!-- collab:handoff:start id=" id " -->" { in_blk = 1; print; next }
       $0 == "<!-- collab:handoff:end -->" { in_blk = 0; print; next }
       in_blk && /^- \*\*status:\*\*/ { print "- **status:** " ns; next }
       { print }
-    ' "$LOG" > "$tmp"
-    if ! grep -q "handoff:start id=$ID" "$tmp"; then
-      echo "handoff: id $ID not found in $LOG" >&2
-      rm -f "$tmp"
+    ' "$target_log" > "$tmp"
+    mv "$tmp" "$target_log"
+    echo "handoff $ID -> $newstatus"
+    ;;
+
+  pickup)
+    # Receiver-side: locate the block (across ALL agent logs, not just sender's),
+    # print its summary to stdout, and stamp `picked-up:` metadata onto the block.
+    # Status stays `open` until close. Idempotent: re-running on the same id
+    # updates the timestamp but produces the same summary.
+    NOW=$(bash "$HERE/collab-now.sh")
+    found_log=""
+    for desc in .collab/agents.d/*.yml; do
+      [[ -f "$desc" ]] || continue
+      base=$(basename "$desc")
+      [[ "$base" == _* ]] && continue
+      candidate=$(awk -F': *' '/^log_path:/ { print $2 }' "$desc")
+      [[ -f "$candidate" ]] || continue
+      if grep -q "<!-- collab:handoff:start id=$ID -->" "$candidate"; then
+        found_log="$candidate"
+        break
+      fi
+    done
+    if [[ -z "$found_log" ]]; then
+      echo "handoff pickup: id $ID not found in any agent log" >&2
       exit 1
     fi
-    mv "$tmp" "$LOG"
-    echo "handoff $ID -> $newstatus"
+
+    # Print the block summary to stdout for the receiver to paste into state.md.
+    awk -v id="$ID" '
+      $0 ~ "<!-- collab:handoff:start id=" id " -->" { in_blk = 1 }
+      in_blk { print }
+      $0 == "<!-- collab:handoff:end -->" && in_blk { in_blk = 0; exit }
+    ' "$found_log"
+
+    # Stamp picked-up metadata. Buffer the target block so we can decide where
+    # to place picked-up after seeing the whole thing (idempotent: replaces an
+    # existing picked-up line; otherwise inserts after the status line).
+    tmp=$(mktemp)
+    awk -v id="$ID" -v who="$FROM" -v now="$NOW" '
+      $0 ~ "<!-- collab:handoff:start id=" id " -->" {
+        in_blk = 1; n = 0; picked_seen = 0
+        lines[n++] = $0
+        next
+      }
+      in_blk && $0 == "<!-- collab:handoff:end -->" {
+        for (i = 0; i < n; i++) {
+          print lines[i]
+          if (!picked_seen && lines[i] ~ /^- \*\*status:\*\*/) {
+            print "- **picked-up:** " now " by " who
+          }
+        }
+        print
+        in_blk = 0
+        next
+      }
+      in_blk {
+        if ($0 ~ /^- \*\*picked-up:\*\*/) {
+          lines[n++] = "- **picked-up:** " now " by " who
+          picked_seen = 1
+        } else {
+          lines[n++] = $0
+        }
+        next
+      }
+      { print }
+    ' "$found_log" > "$tmp"
+    mv "$tmp" "$found_log"
+
+    # Bump INDEX timestamp so other agents see the activity.
+    bash "$HERE/collab-register.sh" "$found_log" >/dev/null 2>&1 || true
+
+    echo "---"
+    echo "handoff $ID picked up by $FROM at $NOW"
     ;;
 esac

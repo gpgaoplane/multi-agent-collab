@@ -74,6 +74,26 @@ to surface any open handoff targeting you. When you finish validating, close it:
 ./scripts/collab-handoff.sh close <id> --from <your-name>
 ```
 
-**User vocabulary.** The human can say "take the baton" or "pick up handoff" to any agent — these phrases are a universal contract across Claude / Codex / Gemini / others. The agent should respond by running the catchup command above.
+## User vocabulary (universal across agents)
+
+These phrases are a contract between the user and any agent — Claude / Codex / Gemini / others all respond identically.
+
+**To trigger a handoff (sender side):**
+- "wrap up for handoff [to <agent>]"
+- "prepare handoff to <agent>"
+- "hand it off to <agent>"
+- "tag out to <agent>"
+
+Agent action: run the End-of-Task Protocol → emit Receipt → run `./scripts/collab-handoff.sh <to-agent> --from <self> --message "…" --files "…"` → confirm with the printed handoff ID.
+
+**To take a handoff (receiver side):**
+- "take the baton"
+- "pick up handoff [from <agent>]"
+- "take over from <agent>"
+- "you're up"
+
+Agent action: run `./scripts/collab-catchup.sh preview --agent <self> --handoff`. If exactly one open block targets you, run `./scripts/collab-handoff.sh pickup <id> --from <self>` to print the summary and stamp `picked-up:` on the block. If multiple, ask the user which to pick up. After validation, close with `./scripts/collab-handoff.sh close <id> --from <self>`.
+
+**Group handoffs.** Use `to: any` to target any available agent — `./scripts/collab-handoff.sh any --from <self>` writes a block visible to every agent's `--handoff` preview. The first agent to acknowledge owns it.
 
 See `docs/handoff-schema.md` for the full block format and state machine.
