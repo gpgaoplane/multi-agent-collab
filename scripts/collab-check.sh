@@ -55,6 +55,36 @@ else
   audit_rc=1
 fi
 
+# --- Rotation threshold check (non-fatal) ---
+check_rotation_threshold() {
+  local cfg=".collab/config.yml"
+  [[ -f "$cfg" ]] || return 0
+  local threshold
+  threshold=$(awk -F': *' '/^rotate_at_lines:/ { print $2; exit }' "$cfg")
+  [[ -n "$threshold" && "$threshold" =~ ^[0-9]+$ ]] || return 0
+
+  local warned=0
+  for desc in .collab/agents.d/*.yml; do
+    [[ -f "$desc" ]] || continue
+    [[ "$(basename "$desc")" == _* ]] && continue
+    local log
+    log=$(awk -F': *' '/^log_path:/ { print $2 }' "$desc")
+    [[ -f "$log" ]] || continue
+    local count
+    count=$(wc -l < "$log" | tr -d ' ')
+    if [[ $count -gt $threshold ]]; then
+      if [[ $warned -eq 0 ]]; then
+        echo
+        warned=1
+      fi
+      local agent
+      agent=$(basename "$desc" .yml)
+      echo "advisory: $log is $count lines (threshold $threshold). Run: ./scripts/collab-rotate-log.sh $agent"
+    fi
+  done
+}
+check_rotation_threshold || true
+
 # --- Update advisory (non-fatal; skipped in CI / with update_channel:none) ---
 check_for_update() {
   [[ "${CI:-}" == "true" ]] && return 0
