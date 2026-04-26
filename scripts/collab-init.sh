@@ -15,6 +15,8 @@ source "$HERE/lib/merge.sh"
 DRY_RUN=0
 FORCE=0
 FORCE_DIRTY=0
+NO_BACKUP=0
+RESTORE_ID=""
 TARGET_AGENTS=()
 ADD_AGENT=""
 JOIN_AGENT=""
@@ -36,6 +38,10 @@ Usage: collab-init.sh [options]
   --install-hooks      Install collab pre-commit hook at .git/hooks/pre-commit
   --ack-upgrade        Archive .collab/UPGRADE_NOTES.md (run after reading post-upgrade ritual)
   --force-dirty        Skip the upgrade cleanliness check (dirty working tree allowed)
+  --no-backup          Skip the auto-backup that runs before upgrade migrations
+  --restore <id>       Restore framework-managed files from a backup directory
+                       (use 'latest' for the most recent backup; or pass a
+                       specific timestamp like 0.3.0-to-0.4.0-20260426150405)
   -h, --help           Show this help
 EOF
 }
@@ -50,6 +56,8 @@ while [[ $# -gt 0 ]]; do
     --install-hooks) INSTALL_HOOKS=1; shift ;;
     --ack-upgrade) ACK_UPGRADE=1; shift ;;
     --force-dirty) FORCE_DIRTY=1; shift ;;
+    --no-backup) NO_BACKUP=1; shift ;;
+    --restore) RESTORE_ID="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown arg: $1" >&2; usage; exit 1 ;;
   esac
@@ -319,6 +327,122 @@ EOF
   say "installed collab pre-commit hook at $dest"
 }
 
+# M3: backup + restore.
+# `do_backup <from> <to>` snapshots framework-managed files into a timestamped
+# directory under .collab/backup/. Run automatically before upgrade migrations
+# unless --no-backup. `do_restore <id>` reverses, where id is "latest" or an
+# exact backup directory name.
+
+# Files that count as "framework-managed" for backup purposes. Walks INDEX.md
+# (authoritative for managed files) plus a few well-known paths that might
+# lack frontmatter (AGENTS.md) or might not yet be in INDEX during early
+# upgrade phases.
+collect_backup_paths() {
+  local paths=()
+  if [[ -f .collab/INDEX.md ]]; then
+    while IFS= read -r p; do
+      [[ -z "$p" ]] && continue
+      [[ -f "$p" ]] || continue
+      paths+=("$p")
+    done < <(awk -F'|' '
+      /^\| [^-]/ && !/^\| path/ {
+        # Trim leading "| " and the path column.
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2)
+        if ($2 != "path" && $2 != "") print $2
+      }
+    ' .collab/INDEX.md)
+  fi
+  # Always include these even if not in INDEX.
+  for f in AGENTS.md AI_AGENTS.md .collab/VERSION .collab/config.yml; do
+    [[ -f "$f" ]] && paths+=("$f")
+  done
+  # De-dupe.
+  printf '%s\n' "${paths[@]}" | awk '!seen[$0]++'
+}
+
+do_backup() {
+  local from="$1"
+  local to="$2"
+  local stamp
+  stamp=$(date +%Y%m%d%H%M%S)
+  local backup_dir=".collab/backup/${from}-to-${to}-${stamp}"
+
+  if [[ $DRY_RUN -eq 1 ]]; then
+    say "would create backup at $backup_dir"
+    return 0
+  fi
+
+  mkdir -p "$backup_dir"
+  local count=0
+  while IFS= read -r path; do
+    [[ -z "$path" ]] && continue
+    local target="$backup_dir/$path"
+    mkdir -p "$(dirname "$target")"
+    cp "$path" "$target"
+    count=$((count + 1))
+  done < <(collect_backup_paths)
+
+  cat > "$backup_dir/RESTORE.md" <<EOF
+# Backup — ${from} -> ${to} (${stamp})
+
+This directory was created by collab-init before applying migrations.
+It contains a verbatim snapshot of framework-managed files at the
+moment the upgrade started.
+
+To restore from this backup:
+
+    bash scripts/collab-init.sh --restore ${from}-to-${to}-${stamp}
+
+To restore the most recent backup:
+
+    bash scripts/collab-init.sh --restore latest
+
+To delete this backup:
+
+    rm -rf "$backup_dir"
+EOF
+
+  say "backup: snapshotted $count files to $backup_dir"
+}
+
+do_restore() {
+  local id="$1"
+  local backup_root=".collab/backup"
+
+  if [[ ! -d "$backup_root" ]]; then
+    echo "restore: no backup directory at $backup_root" >&2
+    exit 1
+  fi
+
+  local target=""
+  if [[ "$id" == "latest" ]]; then
+    target=$(ls -1t "$backup_root" 2>/dev/null | head -1)
+    [[ -n "$target" ]] || { echo "restore: no backups found in $backup_root" >&2; exit 1; }
+    target="$backup_root/$target"
+  else
+    target="$backup_root/$id"
+    [[ -d "$target" ]] || { echo "restore: no such backup at $target" >&2; exit 1; }
+  fi
+
+  if [[ $DRY_RUN -eq 1 ]]; then
+    say "would restore from $target"
+    return 0
+  fi
+
+  local count=0
+  # Walk the backup directory; for every file (other than RESTORE.md), copy it
+  # back to its original location (relative to the repo root).
+  while IFS= read -r -d '' src; do
+    local rel="${src#$target/}"
+    [[ "$rel" == "RESTORE.md" ]] && continue
+    mkdir -p "$(dirname "$rel")"
+    cp "$src" "$rel"
+    count=$((count + 1))
+  done < <(find "$target" -type f -print0)
+
+  echo "restore: restored $count files from $target"
+}
+
 install_config() {
   local src="$TEMPLATES/config.yml"
   local dest=".collab/config.yml"
@@ -473,6 +597,12 @@ refresh_managed_sections() {
   done
 }
 
+# --restore: copy files from a backup directory back to live locations and exit.
+if [[ -n "$RESTORE_ID" ]]; then
+  do_restore "$RESTORE_ID"
+  exit 0
+fi
+
 # --ack-upgrade: archive the transient UPGRADE_NOTES.md and exit. Idempotent —
 # if the file is already absent or already archived, this is a no-op.
 if [[ $ACK_UPGRADE -eq 1 ]]; then
@@ -563,6 +693,11 @@ EOF
     installed=$(cat .collab/VERSION)
     shipped=$(cat "$TEMPLATES/collab/VERSION")
     say "Upgrading from $installed to $shipped"
+
+    # M3: auto-backup before any migration runs. Disable with --no-backup.
+    if [[ $NO_BACKUP -eq 0 && $DRY_RUN -eq 0 ]]; then
+      do_backup "$installed" "$shipped"
+    fi
 
     # Capture migration output for UPGRADE_NOTES.md while still streaming to
     # stdout. The notes file becomes a transient artifact the next agent reads
