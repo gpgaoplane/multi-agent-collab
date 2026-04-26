@@ -14,6 +14,7 @@ source "$HERE/lib/merge.sh"
 
 DRY_RUN=0
 FORCE=0
+FORCE_DIRTY=0
 TARGET_AGENTS=()
 ADD_AGENT=""
 JOIN_AGENT=""
@@ -34,6 +35,7 @@ Usage: collab-init.sh [options]
   --force              Overwrite non-marker content (destructive)
   --install-hooks      Install collab pre-commit hook at .git/hooks/pre-commit
   --ack-upgrade        Archive .collab/UPGRADE_NOTES.md (run after reading post-upgrade ritual)
+  --force-dirty        Skip the upgrade cleanliness check (dirty working tree allowed)
   -h, --help           Show this help
 EOF
 }
@@ -47,6 +49,7 @@ while [[ $# -gt 0 ]]; do
     --force) FORCE=1; shift ;;
     --install-hooks) INSTALL_HOOKS=1; shift ;;
     --ack-upgrade) ACK_UPGRADE=1; shift ;;
+    --force-dirty) FORCE_DIRTY=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown arg: $1" >&2; usage; exit 1 ;;
   esac
@@ -531,6 +534,32 @@ case "$MODE" in
     fi
     ;;
   upgrade)
+    # M2: cleanliness check. Refuse to upgrade with tracked changes in the
+    # working tree — migration output mixed with in-flight work is hard to
+    # disentangle. Untracked files are fine. Override with --force-dirty.
+    if [[ $DRY_RUN -eq 0 && $FORCE_DIRTY -eq 0 ]]; then
+      if command -v git >/dev/null 2>&1 && [[ -d .git ]]; then
+        # `--porcelain` includes both staged and unstaged tracked changes;
+        # untracked files appear with `??` and we strip those out.
+        dirty=$(git status --porcelain 2>/dev/null | grep -vE '^\?\? ' || true)
+        if [[ -n "$dirty" ]]; then
+          cat >&2 <<EOF
+collab-init: working tree has tracked changes — refusing to upgrade.
+
+Migration output would mix with your in-flight work and become hard to
+disentangle. Either:
+
+  1. Commit or stash your changes first, then re-run.
+  2. Pass --force-dirty to override (you'll have to untangle the diff yourself).
+
+Files with tracked changes:
+$dirty
+EOF
+          exit 1
+        fi
+      fi
+    fi
+
     installed=$(cat .collab/VERSION)
     shipped=$(cat "$TEMPLATES/collab/VERSION")
     say "Upgrading from $installed to $shipped"
