@@ -179,7 +179,7 @@ render_adapters_table() {
   fi
 
   local body
-  body=$'\n## Current Adapters\n\n| Agent | Config file | Memory dir | Work log |\n|-------|-------------|------------|----------|'
+  body=$'\n<!-- WARNING: framework-managed; edit OUTSIDE this block, not inside -->\n## Current Adapters\n\n| Agent | Config file | Memory dir | Work log |\n|-------|-------------|------------|----------|'
 
   for yml in .collab/agents.d/*.yml; do
     [[ -f "$yml" ]] || continue

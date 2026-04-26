@@ -18,6 +18,7 @@ skip-if: "status != active or last-updated <= your watermark"
 ---
 
 <!-- collab:log-archived-summary:start -->
+<!-- WARNING: framework-managed; edit OUTSIDE this block, not inside -->
 <!-- Older entries collapse to one-liners here on rotation; full history in
      .collab/archive/agents/{{AGENT_NAME}}-<date>.md -->
 <!-- collab:log-archived-summary:end -->

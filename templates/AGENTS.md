@@ -1,4 +1,5 @@
 <!-- collab:agents-md:start -->
+<!-- WARNING: framework-managed; edit OUTSIDE this block, not inside -->
 # Multi-Agent Collaboration
 
 This repo uses the [`multi-agent-collab`](https://github.com/gpgaoplane/multi-agent-collab) skill for coordinating multiple AI coding agents (Claude, Codex, Gemini, and others). Every AI agent working here MUST read these files before taking any action:
@@ -22,6 +23,7 @@ Skipping this step means you will step on other agents' files without logging yo
 <!-- collab:agents-md:end -->
 
 <!-- collab:critical-rules:start -->
+<!-- WARNING: framework-managed; edit OUTSIDE this block, not inside -->
 ## Critical rules (read these even if you only have AGENTS.md loaded)
 
 - **Receipt is required.** Every substantive task ends with a Task Receipt in your work log (`docs/agents/<self>.md`). See `.collab/PROTOCOL.md`.

@@ -17,6 +17,7 @@ This is the single entry point for any AI agent working here (Claude, Codex, Gem
 ---
 
 <!-- collab:project-summary:start -->
+<!-- WARNING: framework-managed; edit OUTSIDE this block, not inside -->
 ## What This Project Is
 
 {{PROJECT_SUMMARY}}
@@ -37,6 +38,7 @@ This is the single entry point for any AI agent working here (Claude, Codex, Gem
 ---
 
 <!-- collab:onboarding:start -->
+<!-- WARNING: framework-managed; edit OUTSIDE this block, not inside -->
 ## Onboarding Checklist
 
 Run through this before every work session:
@@ -55,6 +57,7 @@ Skip any step whose file's frontmatter `status != active`.
 ---
 
 <!-- collab:behavioral-rules:start -->
+<!-- WARNING: framework-managed; edit OUTSIDE this block, not inside -->
 ## Behavioral Rules
 
 ### Verification
@@ -119,6 +122,7 @@ When context is auto-compacted mid-session, the conversation summary survives bu
 ---
 
 <!-- collab:routing-pointer:start -->
+<!-- WARNING: framework-managed; edit OUTSIDE this block, not inside -->
 ## Fan-Out Routing
 
 See `.collab/ROUTING.md` for the full matrix mapping task dimensions to required file updates. Summary: hit every row that applies. Over-update beats under-update.
@@ -126,7 +130,42 @@ See `.collab/ROUTING.md` for the full matrix mapping task dimensions to required
 
 ---
 
+<!-- collab:customization-guide:start -->
+<!-- WARNING: framework-managed; edit OUTSIDE this block, not inside -->
+## How to safely customize managed files
+
+Several files in this skill (`AI_AGENTS.md`, `AGENTS.md`, work logs, others) contain regions wrapped in `<!-- collab:NAME:start -->` … `<!-- collab:NAME:end -->` markers. Those regions are **framework-managed**: every `collab-init` re-run or upgrade rewrites their content from the shipped template. Anything you add **inside** a marker block will be lost on the next refresh.
+
+**Safe pattern — edit OUTSIDE markers:**
+
+```markdown
+<!-- collab:behavioral-rules:start -->
+... framework rules go here ...
+<!-- collab:behavioral-rules:end -->
+
+## My team's local rules        ← OUTSIDE markers, preserved forever
+- Rule one
+- Rule two
+```
+
+**Unsafe pattern — edit INSIDE markers:**
+
+```markdown
+<!-- collab:behavioral-rules:start -->
+... framework rules ...
+- My custom rule              ← INSIDE markers, REWRITTEN on next re-init
+<!-- collab:behavioral-rules:end -->
+```
+
+Files entirely owned by the framework (no markers, just whole-file replacement on re-init): `.collab/PROTOCOL.md`, `.collab/ROUTING.md`. Don't hand-edit these — propose changes upstream instead.
+
+Files with no markers at all (entirely yours/your-agent's): `.<agent>/memory/decisions.md`, `pitfalls.md`, `context.md`. Edit freely.
+
+If unsure about a section, look for the marker. No marker = yours. Marker = framework's.
+<!-- collab:customization-guide:end -->
+
 <!-- collab:agent-log-template:start -->
+<!-- WARNING: framework-managed; edit OUTSIDE this block, not inside -->
 ## Agent Log Template
 
 When creating your log file (`docs/agents/<your-agent-name>.md`), start with the template under `templates/work-log-seed.md`. Every new entry ends with a Task Receipt (see `.collab/PROTOCOL.md`).
