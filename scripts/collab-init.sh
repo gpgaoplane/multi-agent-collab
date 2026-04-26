@@ -18,6 +18,7 @@ TARGET_AGENTS=()
 ADD_AGENT=""
 JOIN_AGENT=""
 INSTALL_HOOKS=0
+RESOLVED_AGENTS=()
 
 usage() {
   cat <<'EOF'
@@ -54,6 +55,64 @@ say() {
   else
     echo "$*"
   fi
+}
+
+# Detect the calling agent via env-var probe. Returns name on stdout; empty if
+# nothing matches. Probe order is fixed (claude, codex, gemini) — first hit wins.
+# Env-var detection is best-effort across CLI versions; fallback is --agent or
+# $COLLAB_AGENT, both checked by resolve_calling_agents() before this function.
+detect_calling_agent() {
+  if [[ -n "${CLAUDECODE:-}" || -n "${CLAUDE_CODE_SSE_PORT:-}" || -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]]; then
+    echo "claude"
+    return 0
+  fi
+  if [[ -n "${CODEX_HOME:-}" || -n "${CODEX_CLI:-}" ]]; then
+    echo "codex"
+    return 0
+  fi
+  if [[ -n "${GEMINI_CLI:-}" || -n "${GEMINI_API_KEY:-}" || -n "${GOOGLE_AI_API_KEY:-}" ]]; then
+    echo "gemini"
+    return 0
+  fi
+  return 0
+}
+
+# Resolve which agents to bootstrap on `init` (fresh mode). Precedence:
+#   1. --agent <name> flag (one or more)
+#   2. $COLLAB_AGENT env var
+#   3. detect_calling_agent env probe
+#   4. hard-fail with guidance
+# Re-init / upgrade modes skip resolution and iterate existing descriptors.
+resolve_calling_agents() {
+  if [[ ${#TARGET_AGENTS[@]} -gt 0 ]]; then
+    RESOLVED_AGENTS=("${TARGET_AGENTS[@]}")
+    return 0
+  fi
+  if [[ -n "${COLLAB_AGENT:-}" ]]; then
+    RESOLVED_AGENTS=("$COLLAB_AGENT")
+    return 0
+  fi
+  local detected
+  detected=$(detect_calling_agent)
+  if [[ -n "$detected" ]]; then
+    RESOLVED_AGENTS=("$detected")
+    return 0
+  fi
+  cat >&2 <<'EOF'
+collab-init: cannot detect calling agent on fresh install.
+
+Re-run with one of:
+  bash scripts/collab-init.sh --agent claude        # or codex / gemini / <name>
+  COLLAB_AGENT=claude bash scripts/collab-init.sh
+
+Detection probed (none set): CLAUDECODE, CLAUDE_CODE_SSE_PORT,
+  CLAUDE_CODE_OAUTH_TOKEN, CODEX_HOME, CODEX_CLI, GEMINI_CLI,
+  GEMINI_API_KEY, GOOGLE_AI_API_KEY.
+
+Add agents later with:
+  bash scripts/collab-init.sh --join <name>
+EOF
+  exit 1
 }
 
 copy_file() {
@@ -104,6 +163,38 @@ parse_descriptor() {
     /^memory_dir:/  { sub(/^memory_dir:[ \t]*/, ""); print "DESC_MEMORY="$0 }
     /^log_path:/    { sub(/^log_path:[ \t]*/, ""); print "DESC_LOG="$0 }
   ' "$f"
+}
+
+# Render <!-- collab:current-adapters --> from the live descriptor set so the
+# "Current Adapters" table in AI_AGENTS.md always reflects the agents that are
+# actually installed in this repo. Called after any change to .collab/agents.d/.
+render_adapters_table() {
+  local target="${1:-AI_AGENTS.md}"
+  [[ -f "$target" ]] || return 0
+  if ! merge_has_section "$target" "current-adapters"; then
+    return 0
+  fi
+
+  local body
+  body=$'\n## Current Adapters\n\n| Agent | Config file | Memory dir | Work log |\n|-------|-------------|------------|----------|'
+
+  for yml in .collab/agents.d/*.yml; do
+    [[ -f "$yml" ]] || continue
+    [[ "$(basename "$yml")" == _* ]] && continue
+    local DESC_NAME="" DESC_DISPLAY="" DESC_ADAPTER="" DESC_MEMORY="" DESC_LOG=""
+    eval "$(parse_descriptor "$yml")"
+    local adapter_display
+    if [[ "$DESC_ADAPTER" == */* ]]; then
+      adapter_display="\`$DESC_ADAPTER\`"
+    else
+      adapter_display="\`$DESC_ADAPTER\` (root)"
+    fi
+    body+=$'\n'"| $DESC_DISPLAY | $adapter_display | \`$DESC_MEMORY/\` | \`$DESC_LOG\` |"
+  done
+
+  if [[ $DRY_RUN -eq 0 ]]; then
+    merge_replace_section "$target" "current-adapters" "$body"
+  fi
 }
 
 bootstrap_agent() {
@@ -230,11 +321,9 @@ setup_shared() {
   copy_file "$TEMPLATES/collab/ROUTING.md" ".collab/ROUTING.md"
   copy_file "$TEMPLATES/collab/PROTOCOL.md" ".collab/PROTOCOL.md"
   mkdir -p ".collab/agents.d" ".collab/archive"
-  for yml in "$TEMPLATES/agents.d/"*.yml; do
-    # Skip internal templates (underscore-prefixed) — not real shipped descriptors.
-    [[ "$(basename "$yml")" == _* ]] && continue
-    copy_file "$yml" ".collab/agents.d/$(basename "$yml")"
-  done
+  # Per-agent descriptor seeding happens via join_agent() during dispatch — this
+  # keeps fresh `init` to a single calling agent instead of pre-seeding all
+  # shipped descriptors. Add others later with --join <name>.
   copy_file "$TEMPLATES/AI_AGENTS.md" "AI_AGENTS.md"
   inject_agents_md_section
   install_config
@@ -332,13 +421,9 @@ re_init_shared() {
   # AGENTS.md — always ensure managed section present/current.
   inject_agents_md_section
 
-  # Sync descriptors (additive only — never remove user customizations).
+  # Descriptors are NOT auto-seeded on re-init. The calling-agent-only invariant
+  # established at fresh install is preserved; users add agents via --join.
   mkdir -p .collab/agents.d .collab/archive
-  for yml in "$TEMPLATES/agents.d/"*.yml; do
-    local name=$(basename "$yml")
-    [[ "$name" == _* ]] && continue
-    [[ -f ".collab/agents.d/$name" ]] || copy_file "$yml" ".collab/agents.d/$name"
-  done
 
   install_config
 }
@@ -375,12 +460,42 @@ refresh_managed_sections() {
 MODE=$(detect_mode)
 say "Mode: $MODE"
 
+# Validate flag combinations. --join / --add-agent require an existing install;
+# --agent acts as the calling-agent override on fresh installs.
+if [[ "$MODE" == "fresh" ]]; then
+  if [[ -n "$JOIN_AGENT" ]]; then
+    echo "collab-init: --join is not valid on a fresh install. Use --agent <name> to set the calling agent." >&2
+    exit 1
+  fi
+  if [[ -n "$ADD_AGENT" ]]; then
+    echo "collab-init: --add-agent is not valid on a fresh install. Use --agent <name> to set the calling agent." >&2
+    exit 1
+  fi
+fi
+
 case "$MODE" in
   fresh)
+    resolve_calling_agents   # populates RESOLVED_AGENTS or hard-fails
     setup_shared
+    for name in "${RESOLVED_AGENTS[@]}"; do
+      join_agent "$name"
+    done
     ;;
   re-init)
     re_init_shared
+    if [[ -z "$JOIN_AGENT" && -z "$ADD_AGENT" ]]; then
+      if [[ ${#TARGET_AGENTS[@]} -eq 0 ]]; then
+        for yml in ".collab/agents.d/"*.yml; do
+          [[ -f "$yml" ]] || continue
+          [[ "$(basename "$yml")" == _* ]] && continue
+          bootstrap_agent "$yml"
+        done
+      else
+        for name in "${TARGET_AGENTS[@]}"; do
+          bootstrap_agent ".collab/agents.d/${name}.yml"
+        done
+      fi
+    fi
     ;;
   upgrade)
     installed=$(cat .collab/VERSION)
@@ -409,26 +524,29 @@ case "$MODE" in
 
     re_init_shared
     [[ $DRY_RUN -eq 1 ]] || echo "$shipped" > .collab/VERSION
+    if [[ -z "$JOIN_AGENT" && -z "$ADD_AGENT" ]]; then
+      if [[ ${#TARGET_AGENTS[@]} -eq 0 ]]; then
+        for yml in ".collab/agents.d/"*.yml; do
+          [[ -f "$yml" ]] || continue
+          [[ "$(basename "$yml")" == _* ]] && continue
+          bootstrap_agent "$yml"
+        done
+      else
+        for name in "${TARGET_AGENTS[@]}"; do
+          bootstrap_agent ".collab/agents.d/${name}.yml"
+        done
+      fi
+    fi
     ;;
 esac
 
-# Agent selection.
+# --join / --add-agent for re-init / upgrade modes.
 if [[ -n "$JOIN_AGENT" ]]; then
   join_agent "$JOIN_AGENT"
-elif [[ -n "$ADD_AGENT" ]]; then
+fi
+if [[ -n "$ADD_AGENT" ]]; then
   validate_descriptor_exists "$ADD_AGENT"
   bootstrap_agent ".collab/agents.d/${ADD_AGENT}.yml"
-elif [[ ${#TARGET_AGENTS[@]} -eq 0 ]]; then
-  for yml in ".collab/agents.d/"*.yml; do
-    [[ -f "$yml" ]] || continue
-    # Skip internal underscore-prefixed templates if any leaked in.
-    [[ "$(basename "$yml")" == _* ]] && continue
-    bootstrap_agent "$yml"
-  done
-else
-  for name in "${TARGET_AGENTS[@]}"; do
-    bootstrap_agent ".collab/agents.d/${name}.yml"
-  done
 fi
 
 if [[ $DRY_RUN -eq 0 ]]; then
@@ -436,6 +554,7 @@ if [[ $DRY_RUN -eq 0 ]]; then
   for f in AI_AGENTS.md AGENTS.md .collab/ACTIVE.md .collab/INDEX.md .collab/ROUTING.md .collab/PROTOCOL.md; do
     [[ -f "$f" ]] && bash "$HERE/collab-register.sh" "$f" 2>/dev/null || true
   done
+  render_adapters_table "AI_AGENTS.md"
 fi
 
 if [[ $INSTALL_HOOKS -eq 1 ]]; then

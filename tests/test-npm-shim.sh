@@ -42,8 +42,8 @@ assert_contains "missing" "$out"
 
 start_test "cli.js presence start proxies to collab-presence.sh"
 TARGET2=$(make_tmp_repo)
+init_with_all_agents "$TARGET2" "$SKILL_ROOT"
 cd "$TARGET2"
-bash "$SKILL_ROOT/scripts/collab-init.sh" >/dev/null 2>&1
 node "$SKILL_ROOT/bin/cli.js" presence start --agent claude --session test >/dev/null 2>&1
 grep -q "| claude | test |" .collab/ACTIVE.md && ok || fail "presence start via cli.js didn't work"
 

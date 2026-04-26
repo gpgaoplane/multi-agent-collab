@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.0 — 2026-04-26 (in progress)
+
+### Changed (breaking)
+- **Bootstrap installs only the calling agent.** `collab-init` no longer pre-seeds all three first-class adapters. Detection precedence: `--agent <name>` → `$COLLAB_AGENT` → env-var probe (`CLAUDECODE`, `CODEX_HOME`, `GEMINI_CLI`, etc.) → hard-fail with re-run guidance. Other agents arrive via `--join <name>`. `--join` and `--add-agent` are rejected on fresh installs (use `--agent` instead).
+- **`AI_AGENTS.md` Current Adapters table is now dynamic** — rendered from `.collab/agents.d/*.yml` on every init/join/migration.
+
+### Added
+- Migration `scripts/migrations/0.3.0-to-0.4.0.sh` detects agents with seed-only work logs (no entries, no handoff blocks) and offers to prune them. Default-keep when non-interactive. Honors `COLLAB_MIGRATE_NONINTERACTIVE=1`, `CI`, `COLLAB_MIGRATE_REMOVE_ALL_SEED=1`. The calling agent (`$COLLAB_AGENT`) is excluded from flagging.
+- `tests/test-collab-init-upgrade-v040.sh` covers seed-only detection, caller exclusion, non-interactive default-keep, and INDEX cleanup on prune.
+
+### Documentation
+- README, SKILL.md, and `docs/plans/2026-04-25-v0.4.0-plan.md` reflect the calling-agent-only model and the upgrade path from v0.3.0.
+
 ## 0.3.0 — 2026-04-23
 
 ### Added

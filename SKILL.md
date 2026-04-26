@@ -2,7 +2,7 @@
 name: multi-agent-collab
 description: Bootstrap multi-agent AI collaboration structure (shared contract, per-agent adapters, memory, work logs, fan-out routing, end-of-task Protocol) in any git repo. Invoke only when the user explicitly asks to set up multi-agent collaboration, add a new agent to an existing collab-enabled repo, or check whether the structure is already installed.
 license: MIT
-version: 0.3.0
+version: 0.4.0
 ---
 
 # multi-agent-collab — bootstrap
@@ -39,16 +39,25 @@ local clone at `$SKILL_DIR`):
 bash "$SKILL_DIR/scripts/collab-init.sh"
 ```
 
-Both paths are idempotent. User content outside `<!-- collab:...:start/end -->`
+**Calling-agent-only install (v0.4.0+).** `init` bootstraps **only the
+agent that ran it**. Detection precedence:
+
+1. `--agent <name>` flag (explicit override)
+2. `$COLLAB_AGENT` env var
+3. Env-var probe (`CLAUDECODE`, `CODEX_HOME`, `GEMINI_CLI`, …)
+4. Hard-fail with guidance if nothing matches
+
+Other agents arrive later via `join` (Step 3). Both paths are
+idempotent. User content outside `<!-- collab:...:start/end -->`
 markers is preserved on re-run.
 
-After bootstrap, the target repo will contain:
+After a claude-only bootstrap, the target repo contains:
 
-- `AI_AGENTS.md` — shared contract read by every agent
+- `AI_AGENTS.md` — shared contract (Current Adapters table is dynamic)
 - `AGENTS.md` — cross-agent front door pointing at AI_AGENTS.md
-- `.collab/` — INDEX, ACTIVE, ROUTING, PROTOCOL, descriptors
-- `.claude/`, `.codex/`, `GEMINI.md`, `.gemini/` — per-agent adapters and memory
-- `docs/agents/{claude,codex,gemini}.md` — work logs
+- `.collab/` — INDEX, ACTIVE, ROUTING, PROTOCOL, calling agent's descriptor
+- `.claude/` and `docs/agents/claude.md` — adapter, memory, work log
+- (no `.codex/`, no `.gemini/`, no `GEMINI.md` until you `join` them)
 
 ## Step 3: Add a new agent (only when user explicitly requests)
 

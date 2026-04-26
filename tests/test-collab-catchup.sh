@@ -108,6 +108,8 @@ rm -rf "$TARGET4"
 TARGET5=$(make_tmp_repo)
 cd "$TARGET5"
 bash "$SKILL_ROOT/scripts/collab-init.sh" >/dev/null 2>&1
+# Codex needs to be installed for `catchup --agent codex` (descriptor lookup).
+bash "$SKILL_ROOT/scripts/collab-init.sh" --join codex >/dev/null 2>&1
 
 bash "$SKILL_ROOT/scripts/collab-handoff.sh" codex --from claude --message "refactor done" >/dev/null 2>&1
 

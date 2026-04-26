@@ -4,17 +4,22 @@ A reusable skill for bootstrapping consistent multi-agent collaboration in any G
 
 ## Status
 
-v0.3.0 — cross-agent handoff and enforcement. See [`docs/design.md`](docs/design.md) for the full rationale and [`CHANGELOG.md`](CHANGELOG.md) for release history.
+v0.4.0 — calling-agent-only bootstrap, log rotation, vocabulary symmetry. See [`docs/design.md`](docs/design.md) for the full rationale, [`docs/plans/2026-04-25-v0.4.0-plan.md`](docs/plans/2026-04-25-v0.4.0-plan.md) for the release plan, and [`CHANGELOG.md`](CHANGELOG.md) for release history.
 
-## What's new in v0.3.0
+## What's new in v0.4.0
+
+- **Calling-agent-only bootstrap** — `init` materializes only the agent that ran it. Other agents arrive via `join`. Detection probes env vars; falls back to `--agent <name>` or `$COLLAB_AGENT`; hard-fails with guidance when nothing matches. Existing v0.3.0 repos can prune unused agents on upgrade (interactive prompt).
+- **Dynamic adapter table** — `Current Adapters` section in `AI_AGENTS.md` is rendered from `.collab/agents.d/` and re-rendered on every `init`/`join`/migration.
+- **Migration `0.3.0 → 0.4.0`** — detects agents with seed-only work logs, prompts to prune. Default-keep when non-interactive.
+
+## What v0.3.0 shipped
 
 - **Cross-agent handoff** — `collab-handoff <to-agent>` writes a structured handoff block with chain support (`A→B→C→A`).
 - **Delta-read on demand** — `collab-catchup` previews files newer than your watermark; `ack` commits it (two-phase keeps it honest).
-- **Presence board is writable** — `collab-presence start|end` manages `.collab/ACTIVE.md` rows. Handoff auto-removes the sender on completion. Full "load-bearing" adoption depends on per-agent session-start hooks (optional snippets shipped under `templates/optional/`).
-- **Receipt enforcement** — opt-in portable pre-commit hook via `collab-init --install-hooks`. `.collab/config.yml: strict: true` turns warnings into blocks.
-- **Update advisory** — `collab-check` reports when a newer npm version exists (silent in CI, cache 24h).
-- **Session-start snippets** (optional) — per-agent hooks surface remote drift automatically.
-- **Visible empty-state seeds** — empty memory files no longer look like broken installs.
+- **Presence board** — `collab-presence start|end` manages `.collab/ACTIVE.md` rows.
+- **Receipt enforcement** — opt-in portable pre-commit hook via `collab-init --install-hooks`. `.collab/config.yml: strict: true` blocks instead of warning.
+- **Update advisory** — `collab-check` reports when a newer npm version exists.
+- **Session-start snippets** (optional) — surface remote drift automatically.
 - **Auto-publish** — tag `v*` → GitHub Actions publishes to npm.
 
 ## What this skill does
@@ -50,6 +55,21 @@ Runs without permanent install. For a permanent install:
 ```bash
 npm install -g @gpgaoplane/multi-agent-collab
 multi-agent-collab init
+```
+
+**Calling-agent-only install (v0.4.0+).** `init` bootstraps only the agent that runs it. Detection ladder:
+
+1. `--agent <name>` flag wins.
+2. `$COLLAB_AGENT` env var if no flag.
+3. Probe of `CLAUDECODE`, `CLAUDE_CODE_SSE_PORT`, `CLAUDE_CODE_OAUTH_TOKEN`, `CODEX_HOME`, `CODEX_CLI`, `GEMINI_CLI`, `GEMINI_API_KEY`, `GOOGLE_AI_API_KEY`.
+4. Hard-fail with re-run guidance if nothing matches.
+
+To install with a specific agent regardless of detection:
+
+```bash
+npx @gpgaoplane/multi-agent-collab init -- --agent codex
+# or:
+COLLAB_AGENT=codex npx @gpgaoplane/multi-agent-collab init
 ```
 
 ### Via skill drop-in (for SKILL.md-aware agents)
@@ -90,7 +110,9 @@ For agents with non-standard conventions (e.g., adapter file at repo root instea
 npx @gpgaoplane/multi-agent-collab init
 ```
 
-The bootstrap detects the previous version and runs the migration chain automatically (v0.1.0 installs will run both `0.1.0-to-0.2.0.sh` and `0.2.0-to-0.3.0.sh`; v0.2.0 installs run only the latter). User content outside marker sections is preserved.
+The bootstrap detects the previous version and runs the full migration chain (e.g. v0.1.0 → v0.4.0 runs `0.1.0-to-0.2.0.sh`, `0.2.0-to-0.3.0.sh`, `0.3.0-to-0.4.0.sh` in order). User content outside marker sections is preserved.
+
+**Upgrading from v0.3.0 to v0.4.0.** The 0.3.0→0.4.0 migration detects agents that were auto-installed but never used (work logs with no real entries). It prompts per-agent in interactive sessions, defaulting to *keep*. Non-interactive runs (CI, no tty, or `COLLAB_MIGRATE_NONINTERACTIVE=1`) keep all agents. Override with `COLLAB_MIGRATE_REMOVE_ALL_SEED=1` to prune all flagged seed-only agents non-interactively (destructive).
 
 ## Flags (all channels)
 

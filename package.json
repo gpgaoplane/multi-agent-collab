@@ -1,6 +1,6 @@
 {
   "name": "@gpgaoplane/multi-agent-collab",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Bootstrap multi-agent AI collaboration structure in any git repo",
   "bin": {
     "multi-agent-collab": "bin/cli.js"

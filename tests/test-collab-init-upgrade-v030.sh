@@ -13,9 +13,10 @@ cd "$TARGET"
 bash "$SKILL_ROOT/scripts/collab-init.sh" >/dev/null 2>&1
 echo "0.2.0" > .collab/VERSION
 
-start_test "upgrade to 0.3.0 runs migration and bumps version"
+start_test "upgrade chain runs and bumps version to shipped"
 bash "$SKILL_ROOT/scripts/collab-init.sh" >/dev/null 2>&1
-[[ "$(cat .collab/VERSION)" == "0.3.0" ]] && ok || fail "version not bumped: $(cat .collab/VERSION)"
+shipped=$(cat "$SKILL_ROOT/templates/collab/VERSION" | tr -d '[:space:]')
+[[ "$(cat .collab/VERSION)" == "$shipped" ]] && ok || fail "version not bumped to $shipped: $(cat .collab/VERSION)"
 
 start_test "migration installs .collab/config.yml"
 [[ -f .collab/config.yml ]] && grep -qE '^strict:\s*false' .collab/config.yml && ok || fail "config.yml missing post-upgrade"
@@ -41,8 +42,9 @@ rm -f AGENTS.md .collab/config.yml  # state that mirrors a true 0.1.0 install
 
 bash "$SKILL_ROOT/scripts/collab-init.sh" >/dev/null 2>&1
 
-start_test "skip-migration: 0.1.0 → 0.3.0 arrives at 0.3.0"
-[[ "$(cat .collab/VERSION)" == "0.3.0" ]] && ok || fail "version stuck at $(cat .collab/VERSION)"
+start_test "skip-migration: 0.1.0 -> shipped arrives at shipped"
+shipped=$(cat "$SKILL_ROOT/templates/collab/VERSION" | tr -d '[:space:]')
+[[ "$(cat .collab/VERSION)" == "$shipped" ]] && ok || fail "version stuck at $(cat .collab/VERSION)"
 
 start_test "skip-migration: AGENTS.md installed (from 0.2.0 migration)"
 [[ -f AGENTS.md ]] && ok || fail "AGENTS.md missing — did 0.1.0→0.2.0 run?"

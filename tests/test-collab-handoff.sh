@@ -7,8 +7,8 @@ SKILL_ROOT="$(cd "$HERE/.." && pwd)"
 HANDOFF="$SKILL_ROOT/scripts/collab-handoff.sh"
 
 TARGET=$(make_tmp_repo)
+init_with_all_agents "$TARGET" "$SKILL_ROOT"
 cd "$TARGET"
-bash "$SKILL_ROOT/scripts/collab-init.sh" >/dev/null 2>&1
 
 start_test "handoff create writes a block to sender work log"
 bash "$HANDOFF" codex --from claude --message "finished parser refactor" --files "src/parser.go tests/parser_test.go" >/dev/null 2>&1
@@ -37,8 +37,8 @@ grep -q "parent-id.* \`$id\`" docs/agents/codex.md && ok || fail "parent-id link
 
 # --- Full A→B→C→A chain ---
 TARGET2=$(make_tmp_repo)
+init_with_all_agents "$TARGET2" "$SKILL_ROOT"
 cd "$TARGET2"
-bash "$SKILL_ROOT/scripts/collab-init.sh" >/dev/null 2>&1
 
 id1=$(bash "$HANDOFF" codex --from claude --message "A→B" 2>/dev/null)
 id2=$(bash "$HANDOFF" gemini --from codex --message "B→C" --parent-id "$id1" 2>/dev/null)

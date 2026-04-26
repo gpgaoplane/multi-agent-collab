@@ -28,9 +28,10 @@ start_test "SKILL.md has non-empty description"
 desc=$(fm_get_field "$SKILL_DIR/SKILL.md" description)
 [[ -n "$desc" ]] && ok || fail "description empty"
 
-start_test "SKILL.md version is 0.3.0"
+start_test "SKILL.md version matches shipped templates VERSION"
 ver=$(fm_get_field "$SKILL_DIR/SKILL.md" version)
-assert_eq "0.3.0" "$ver"
+shipped=$(cat "$SKILL_DIR/templates/collab/VERSION" | tr -d '[:space:]')
+assert_eq "$shipped" "$ver"
 
 start_test "SKILL.md body includes state-check guard instruction"
 assert_file_contains "$SKILL_DIR/SKILL.md" "Step 1: Check current state"
@@ -41,7 +42,7 @@ start_test "running installer from skill-dir bootstraps target repo"
 assert_file_exists "$TARGET/AI_AGENTS.md"
 assert_file_exists "$TARGET/AGENTS.md"
 assert_file_exists "$TARGET/.collab/VERSION"
-assert_eq "0.3.0" "$(cat "$TARGET/.collab/VERSION" | tr -d '[:space:]')"
+assert_eq "$shipped" "$(cat "$TARGET/.collab/VERSION" | tr -d '[:space:]')"
 
 start_test "re-invoking from skill-dir on installed repo is idempotent"
 (cd "$TARGET" && bash "$SKILL_DIR/scripts/collab-init.sh") >/dev/null 2>&1
