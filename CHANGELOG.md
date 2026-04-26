@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.4.1 — 2026-04-26
+
+Additive patch. No state changes; re-init is sufficient on upgrade.
+
+### Added
+- **`default_agent` key in `.collab/config.yml`.** Optional, opt-in. New tier 3 in the detection ladder: `--agent` flag → `$COLLAB_AGENT` → `config.yml: default_agent` → env probe → hard-fail. Zero false positives — explicit user setting per repo, persistent across shells, auditable in git.
+- **`collab-init --prune-backups [--keep N]`.** Deletes old `.collab/backup/<timestamp>/` directories beyond the most recent N (default 5; or `keep_recent_backups` from `.collab/config.yml`).
+- **Auto-prune on `--ack-upgrade`.** After acking an upgrade, old backups beyond `keep_recent_backups` are pruned automatically. Keeps `.collab/backup/` self-cleaning without manual intervention.
+- **Migration `0.4.0-to-0.4.1.sh`.** Pure no-op summary; emits `>>> Upgrade summary` so users see what changed.
+- **14 new test cases** in `tests/test-v041-features.sh` covering default_agent precedence (flag > env > config > probe > hard-fail), --prune-backups with explicit --keep, default from config, exceeds-count no-op, no-backup-dir graceful, ack-upgrade auto-prune.
+
+### Changed
+- **Hard-fail message expanded.** Mentions the `default_agent` config option and warns that the Codex/Gemini env-var probes are best-effort (they can match config/auth env vars set globally without an active session). `CLAUDECODE` is the only strong active-session signal.
+
+### Notes for users on v0.3.0 or earlier
+This is an additive patch. Run `npx @gpgaoplane/multi-agent-collab init` and the migration chain will apply 0.3.0→0.4.0→0.4.1 in order. The 0.4.0 release notes still apply.
+
 ## 0.4.0 — 2026-04-26
 
 ### Changed (breaking)

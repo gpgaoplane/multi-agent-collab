@@ -1,8 +1,18 @@
 # .collab/config.yml — runtime behavior knobs for multi-agent-collab.
 # Edit in place; this file is user-owned (not overwritten by re-init).
 ---
-strict: false             # true → pre-commit blocks on missing Task Receipt
-presence_required: false  # reserved for v0.5.0
-update_channel: npm       # npm | none
-rotate_at_lines: 300      # collab-check warns when a managed file exceeds this
-rotate_keep_recent: 8     # entries kept in live log on rotation; older entries archived
+# true → pre-commit blocks on missing Task Receipt
+strict: false
+# reserved for v0.5.0
+presence_required: false
+# npm | none
+update_channel: npm
+# collab-check warns when a managed file exceeds this
+rotate_at_lines: 300
+# entries kept in live log on rotation; older entries archived
+rotate_keep_recent: 8
+# backups kept after auto-prune-on-ack (older directories pruned)
+keep_recent_backups: 5
+# Uncomment + set to skip env-var detection on init.
+# Detection ladder: --agent > $COLLAB_AGENT > default_agent > env probe > hard-fail.
+# default_agent: claude

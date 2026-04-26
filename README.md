@@ -4,7 +4,14 @@ A reusable skill for bootstrapping consistent multi-agent collaboration in any G
 
 ## Status
 
-v0.4.0 — calling-agent-only bootstrap, log rotation, vocabulary symmetry. See [`docs/design.md`](docs/design.md) for the full rationale, [`docs/plans/2026-04-25-v0.4.0-plan.md`](docs/plans/2026-04-25-v0.4.0-plan.md) for the release plan, and [`CHANGELOG.md`](CHANGELOG.md) for release history.
+v0.4.1 — `default_agent` config key, backup pruning, hard-fail message expansion. Additive patch over v0.4.0. See [`docs/design.md`](docs/design.md) for the full rationale, [`docs/plans/2026-04-25-v0.4.0-plan.md`](docs/plans/2026-04-25-v0.4.0-plan.md) for the release plan, and [`CHANGELOG.md`](CHANGELOG.md) for release history.
+
+## What's new in v0.4.1
+
+- **`default_agent` in `.collab/config.yml`** — opt-in per-repo persistent setting that fits between `$COLLAB_AGENT` and the env-var probe. Zero false positives. Set once, never re-export.
+- **`collab-init --prune-backups [--keep N]`** — clean up old `.collab/backup/` directories. Default keep = 5 (configurable via `keep_recent_backups` in `.collab/config.yml`).
+- **Auto-prune on `--ack-upgrade`** — `.collab/backup/` self-cleans after each upgrade ack.
+- **Hard-fail message clarified** — names the `default_agent` option and warns that Codex/Gemini env-var probes are best-effort (only `CLAUDECODE` is a strong session signal).
 
 ## What's new in v0.4.0
 

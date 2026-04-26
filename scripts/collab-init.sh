@@ -17,6 +17,8 @@ FORCE=0
 FORCE_DIRTY=0
 NO_BACKUP=0
 DIFF_MODE=0
+PRUNE_BACKUPS=0
+PRUNE_KEEP=""
 RESTORE_ID=""
 TARGET_AGENTS=()
 ADD_AGENT=""
@@ -45,6 +47,9 @@ Usage: collab-init.sh [options]
                        specific timestamp like 0.3.0-to-0.4.0-20260426150405)
   --diff               In upgrade mode: apply migrations, print per-file diffs,
                        then restore from backup. Repo state is unchanged after.
+  --prune-backups      Delete old .collab/backup/<timestamp>/ directories,
+                       keeping only the most recent N (--keep N, default 5).
+  --keep <N>           Used with --prune-backups: how many backups to retain.
   -h, --help           Show this help
 EOF
 }
@@ -62,6 +67,8 @@ while [[ $# -gt 0 ]]; do
     --no-backup) NO_BACKUP=1; shift ;;
     --restore) RESTORE_ID="$2"; shift 2 ;;
     --diff) DIFF_MODE=1; shift ;;
+    --prune-backups) PRUNE_BACKUPS=1; shift ;;
+    --keep) PRUNE_KEEP="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown arg: $1" >&2; usage; exit 1 ;;
   esac
@@ -110,6 +117,16 @@ resolve_calling_agents() {
     RESOLVED_AGENTS=("$COLLAB_AGENT")
     return 0
   fi
+  # v0.4.1 ladder tier 3: per-repo persistent default. Read from config.yml
+  # default_agent key. Zero false positives — explicit user opt-in.
+  if [[ -f .collab/config.yml ]]; then
+    local cfg_default
+    cfg_default=$(awk -F': *' '/^default_agent:/ { print $2; exit }' .collab/config.yml | tr -d '"' | tr -d "'" | xargs 2>/dev/null || true)
+    if [[ -n "$cfg_default" ]]; then
+      RESOLVED_AGENTS=("$cfg_default")
+      return 0
+    fi
+  fi
   local detected
   detected=$(detect_calling_agent)
   if [[ -n "$detected" ]]; then
@@ -123,9 +140,20 @@ Re-run with one of:
   bash scripts/collab-init.sh --agent claude        # or codex / gemini / <name>
   COLLAB_AGENT=claude bash scripts/collab-init.sh
 
+For a persistent setting (per-repo, doesn't need re-export each shell):
+  After init, add to .collab/config.yml:
+    default_agent: claude
+  Detection ladder: --agent > $COLLAB_AGENT > config.yml default_agent >
+  env probe > hard-fail.
+
 Detection probed (none set): CLAUDECODE, CLAUDE_CODE_SSE_PORT,
   CLAUDE_CODE_OAUTH_TOKEN, CODEX_HOME, CODEX_CLI, GEMINI_CLI,
   GEMINI_API_KEY, GOOGLE_AI_API_KEY.
+
+Note: only CLAUDECODE is a strong active-session signal. The Codex and
+Gemini probes are best-effort (they can match config/auth env vars set
+globally without an active session). Prefer --agent or default_agent
+for non-Claude installs.
 
 Add agents later with:
   bash scripts/collab-init.sh --join <name>
@@ -409,6 +437,37 @@ EOF
   say "backup: snapshotted $count files to $backup_dir"
 }
 
+do_prune_backups() {
+  # Keep the most recent $keep backups, delete the rest.
+  local keep="${1:-5}"
+  local backup_root=".collab/backup"
+
+  if [[ ! -d "$backup_root" ]]; then
+    echo "prune-backups: no backup directory at $backup_root; nothing to prune."
+    return 0
+  fi
+
+  # Sort by mtime (most recent first), keep the first $keep, delete rest.
+  mapfile -t all_backups < <(ls -1t "$backup_root" 2>/dev/null)
+  local total=${#all_backups[@]}
+  if [[ $total -le $keep ]]; then
+    echo "prune-backups: $total backup(s); keep=$keep; nothing to prune."
+    return 0
+  fi
+
+  local removed=0
+  for ((i = keep; i < total; i++)); do
+    local victim="${all_backups[i]}"
+    if [[ $DRY_RUN -eq 1 ]]; then
+      echo "[dry-run] would remove $backup_root/$victim"
+    else
+      rm -rf "$backup_root/$victim"
+      removed=$((removed + 1))
+    fi
+  done
+  echo "prune-backups: kept $keep most recent; removed $removed older backup(s)."
+}
+
 do_restore() {
   local id="$1"
   local backup_root=".collab/backup"
@@ -607,8 +666,21 @@ if [[ -n "$RESTORE_ID" ]]; then
   exit 0
 fi
 
+# --prune-backups: delete old backup directories beyond --keep N (default 5).
+if [[ $PRUNE_BACKUPS -eq 1 ]]; then
+  keep="${PRUNE_KEEP:-}"
+  if [[ -z "$keep" && -f .collab/config.yml ]]; then
+    keep=$(awk -F': *' '/^keep_recent_backups:/ { print $2; exit }' .collab/config.yml | xargs 2>/dev/null || true)
+  fi
+  keep="${keep:-5}"
+  do_prune_backups "$keep"
+  exit 0
+fi
+
 # --ack-upgrade: archive the transient UPGRADE_NOTES.md and exit. Idempotent —
 # if the file is already absent or already archived, this is a no-op.
+# Also auto-prunes old backups (beyond keep_recent_backups, default 5) so
+# .collab/backup/ stays self-cleaning. Override the keep count in config.yml.
 if [[ $ACK_UPGRADE -eq 1 ]]; then
   if [[ -f .collab/UPGRADE_NOTES.md ]]; then
     mkdir -p .collab/archive
@@ -623,6 +695,16 @@ if [[ $ACK_UPGRADE -eq 1 ]]; then
     fi
   else
     echo "ack-upgrade: no UPGRADE_NOTES.md present; nothing to do."
+  fi
+
+  # Auto-prune backups: keeps .collab/backup/ from accumulating indefinitely.
+  if [[ -d .collab/backup ]]; then
+    keep=""
+    if [[ -f .collab/config.yml ]]; then
+      keep=$(awk -F': *' '/^keep_recent_backups:/ { print $2; exit }' .collab/config.yml | xargs 2>/dev/null || true)
+    fi
+    keep="${keep:-5}"
+    do_prune_backups "$keep"
   fi
   exit 0
 fi

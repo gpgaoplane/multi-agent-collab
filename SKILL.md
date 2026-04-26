@@ -2,7 +2,7 @@
 name: multi-agent-collab
 description: Bootstrap multi-agent AI collaboration structure (shared contract, per-agent adapters, memory, work logs, fan-out routing, end-of-task Protocol) in any git repo. Invoke only when the user explicitly asks to set up multi-agent collaboration, add a new agent to an existing collab-enabled repo, or check whether the structure is already installed.
 license: MIT
-version: 0.4.0
+version: 0.4.1
 ---
 
 # multi-agent-collab — bootstrap

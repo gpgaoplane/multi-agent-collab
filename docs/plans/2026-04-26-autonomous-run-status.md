@@ -140,15 +140,41 @@ After the user pushed `git tag v0.4.0 && git push origin v0.4.0`, all three rele
 
 **v0.4.0 is live.** `npx @gpgaoplane/multi-agent-collab init` from any v0.3.0 install will trigger the upgrade path.
 
-### Open questions still pending decision
+### Open questions — all resolved
 
 1. ~~**Tag `v0.4.0` now or wait?**~~ **RESOLVED 2026-04-26.** User tagged + pushed; npm publish succeeded.
+2. ~~**Backup pruning policy?**~~ **RESOLVED in v0.4.1.** Shipped `--prune-backups [--keep N]` plus auto-prune-on-ack honoring `keep_recent_backups` (default 5) in `.collab/config.yml`.
+3. ~~**Env-var detection list correctness?**~~ **RESOLVED in v0.4.1.** Per web docs review: `CLAUDECODE` is THE canonical Claude session signal; Codex `CODEX_HOME` and Gemini `GEMINI_API_KEY` are config/auth signals (not session-specific). Decision: don't widen the env probe; instead added a higher-signal layer 3 — `default_agent` in `.collab/config.yml`. Hard-fail message names this option and warns about the probe weakness. Zero false positives by user opt-in.
+4. ~~**`ANTHROPIC_API_KEY` auto-detect?**~~ **RESOLVED in v0.4.1.** Same reasoning as #3 — explicit `default_agent: claude` is the correct mechanism for users who don't otherwise hit the probe. No auto-detect added.
 
-2. **Backup pruning policy?** v0.4.0 ships `--restore` but no `--prune-backups`. After multiple upgrades a repo will accumulate `.collab/backup/<timestamp>/` directories. Two options for v0.5.0: (a) ship a `collab-init --prune-backups [--keep N]` flag, or (b) document `rm -rf .collab/backup/<timestamp>/` as the manual workaround and leave it manual. **No urgency** — backups are small and not on any agent read path.
+### Phase wrap-up — v0.4.x cycle complete (2026-04-26)
 
-3. **Auto-detection env-var list correctness?** The detection ladder probes `CLAUDECODE`, `CLAUDE_CODE_SSE_PORT`, `CLAUDE_CODE_OAUTH_TOKEN` for Claude; `CODEX_HOME`, `CODEX_CLI` for Codex; `GEMINI_CLI`, `GEMINI_API_KEY`, `GOOGLE_AI_API_KEY` for Gemini. If real-world detection misses cases on your end (e.g. Codex CLIs that don't set those vars in your shell), name the right ones and I'll widen the probe in a v0.4.1 patch.
+| Release | Commit on origin/main | Status |
+|---|---|---|
+| v0.4.0 | `331c0ff` (final docs) | ✅ shipped 2026-04-26T22:03:57Z on npm |
+| v0.4.1 | `<this commit>` | code on origin/main; tag is user's call |
 
-4. **Detection probe for `ANTHROPIC_API_KEY`?** Currently excluded — many users have it in their general environment without indicating an active Claude Code session, so it would over-match. If you'd prefer permissive Claude detection at the cost of false positives, say so and I'll add it (with a warning in the README).
+**v0.4.1 deliverables (3/3):**
+- `default_agent` config key + ladder tier 3.
+- `--prune-backups [--keep N]` + auto-prune on `--ack-upgrade`.
+- Hard-fail message expanded with `default_agent` hint and probe-weakness caveat.
+
+**Test totals across the v0.4.x cycle:** ~210 net-new test cases (196 in v0.4.0 + 14 in v0.4.1). All green.
+
+**v0.5.0 candidates (deferred, not blocking):**
+- Auto-install hooks by default
+- Presence-required mode (`config.yml: presence_required: true`)
+- Native Windows bash-free path
+- `collab-check --token-budget` audit
+- CLAUDE.md-level (global) trim tooling
+
+**Quick-resume prompt for the next phase (whenever you start one):**
+```
+Read docs/design.md and CHANGELOG.md to orient. The v0.4.x cycle is complete
+(see docs/plans/2026-04-26-autonomous-run-status.md). Pending v0.5.0 candidates
+listed in that doc. Pick a scope, draft a plan via the writing-plans skill,
+critique with the Plan agent, then execute.
+```
 
 ### Things explicitly NOT done (deferred or out of scope)
 

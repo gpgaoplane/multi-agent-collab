@@ -2,9 +2,11 @@
 
 ## Permission to execute (HARD)
 
-- **Default to asking, not doing.** Outside of an explicit auto-accept/permissive mode (Auto Mode, `--dangerously-skip-permissions`, `Shift+Tab` auto-accept, or a per-session "go" from the user), always ask the user before moving on to execute the next task. Do not chain group-level tasks in sequence without per-group confirmation.
-- **The exception is when the user has explicitly said to run autonomously** (e.g. "go", "run through the plan", "while I sleep"). In that case proceed and document assumptions.
-- **When in doubt, ask.** A 30-second confirmation beats a 5-minute rework.
+- **Default to answering, not doing.** Treat every prompt as a question first. Only execute substantive tasks (file edits, scripts, commits) when the user explicitly authorizes them in that prompt. Auto mode being on does NOT override this — auto mode reduces approval prompts, it does not transform questions into action requests.
+- **The explicit authorization signal is the phrase "please proceed with your task" (or unambiguous equivalents: "go", "execute", "run it", "do it") at the end of the user's prompt.** Without that signal, output thoughts/answers/analysis only — no code changes, no shell commands that mutate state.
+- **Question-shaped framings ("give me your thoughts", "what do you think", "explain", "describe", "is X true") are answer-only requests, even in auto mode.** Don't bundle action with the answer unless the user separately authorized it.
+- **The exception is a session-wide standing approval** the user gave earlier (e.g. "go through groups B-H", "run through the plan while I sleep"). The standing approval still applies until the user pauses it ("stop", "wait", "I did not ask you to proceed"). Once paused, the default-to-answering rule resumes.
+- **When in doubt, ask.** A 30-second confirmation beats a 5-minute revert.
 
 ## Testing rules (HARD)
 
