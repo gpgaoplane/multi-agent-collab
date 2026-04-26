@@ -1,17 +1,36 @@
 # Changelog
 
-## 0.4.0 — 2026-04-26 (in progress)
+## 0.4.0 — 2026-04-26
 
 ### Changed (breaking)
-- **Bootstrap installs only the calling agent.** `collab-init` no longer pre-seeds all three first-class adapters. Detection precedence: `--agent <name>` → `$COLLAB_AGENT` → env-var probe (`CLAUDECODE`, `CODEX_HOME`, `GEMINI_CLI`, etc.) → hard-fail with re-run guidance. Other agents arrive via `--join <name>`. `--join` and `--add-agent` are rejected on fresh installs (use `--agent` instead).
+- **Bootstrap installs only the calling agent (Group A).** `collab-init` no longer pre-seeds all three first-class adapters. Detection precedence: `--agent <name>` → `$COLLAB_AGENT` → env-var probe (`CLAUDECODE`, `CODEX_HOME`, `GEMINI_CLI`, etc.) → hard-fail with re-run guidance. Other agents arrive via `--join <name>`. `--join` and `--add-agent` are rejected on fresh installs (use `--agent` instead).
 - **`AI_AGENTS.md` Current Adapters table is now dynamic** — rendered from `.collab/agents.d/*.yml` on every init/join/migration.
+- **`AI_AGENTS.md` trimmed to ≤100 lines (Group G)** — verbose explanations of frontmatter, free file creation, and delta-read moved to one-line pointers into `docs/design.md` (§6.1, §6.6, §10). All load-bearing rules retained.
 
 ### Added
-- Migration `scripts/migrations/0.3.0-to-0.4.0.sh` detects agents with seed-only work logs (no entries, no handoff blocks) and offers to prune them. Default-keep when non-interactive. Honors `COLLAB_MIGRATE_NONINTERACTIVE=1`, `CI`, `COLLAB_MIGRATE_REMOVE_ALL_SEED=1`. The calling agent (`$COLLAB_AGENT`) is excluded from flagging.
-- `tests/test-collab-init-upgrade-v040.sh` covers seed-only detection, caller exclusion, non-interactive default-keep, and INDEX cleanup on prune.
+- **Work-log rotation (Group B).** `scripts/collab-rotate-log.sh <agent>` archives older entries to `.collab/archive/agents/<agent>-<date>.md`, replaces them in the live log with one-line Receipt summaries, preserves open handoff blocks. Defaults: 300-line threshold, 8 entries kept; configurable in `.collab/config.yml`. CRLF + `## subsection` aware. `collab-check` advises rotation when threshold exceeded.
+- **Handoff vocabulary + pickup verb (Group C).** `collab-handoff pickup <id> --from <self>` prints the block summary and stamps `picked-up:` metadata. Sender + receiver phrases documented in PROTOCOL.md ("wrap up for handoff", "tag out to <agent>", "take the baton", etc.). `close`/`cancel` now search across all agent logs (receivers can close handoffs). Group `to: any` handoff explicitly tested.
+- **Commit cadence rule (Group D).** New `Cadence` bullet under AI_AGENTS.md `Commits` and PROTOCOL.md `Before committing`: commit only on user request or at clean task boundaries with standing approval.
+- **Post-compact persistence (Group E).** New "Post-compact ritual" subsection in AI_AGENTS.md. Optional Claude `PreCompact` hook template under `templates/optional/pre-compact/`. Inline critical rules in root `AGENTS.md` (`collab:critical-rules` block) for platforms that auto-discover only AGENTS.md.
+- **Upgrade communication (Group F).** Migration scripts emit `>>> Upgrade summary:` blocks. `collab-init` writes `.collab/UPGRADE_NOTES.md` (status `transient`) capturing the migration summaries. `collab-init --ack-upgrade` archives the file (explicit ack avoids two-agent race). PROTOCOL.md gains "Post-upgrade ritual". `collab-check` surfaces UPGRADE_NOTES.md presence at top of output.
+- **0.3.0 → 0.4.0 migration script.** Detects agents with seed-only work logs (no entries, no handoff blocks) and offers to prune. Default-keep when non-interactive. Honors `COLLAB_MIGRATE_NONINTERACTIVE=1`, `CI`, `COLLAB_MIGRATE_REMOVE_ALL_SEED=1`. The calling agent (`$COLLAB_AGENT`) is excluded from flagging.
+- **Marker safety + migration safety (Group M).**
+  - **M1.** `<!-- WARNING: framework-managed; edit OUTSIDE this block, not inside -->` comments inside every framework-managed marker block.
+  - **M2.** Pre-migration cleanliness check: upgrade refuses to run on a dirty working tree unless `--force-dirty` is passed. Untracked files don't block.
+  - **M3.** Auto-backup on upgrade (`.collab/backup/<from>-to-<to>-<timestamp>/`). New `--no-backup`, `--restore <id>` flags.
+  - **M4.** New `--diff` flag: applies migration, prints per-file unified-diff hunks, then restores the repo from backup. Lets users preview changes safely.
+  - **M5.** Loud per-migration logging (BEFORE/AFTER line/marker counts via `scripts/lib/migration-log.sh`).
+  - **M6.** New `collab:customization-guide` section in AI_AGENTS.md teaching the edit-OUTSIDE-markers convention with examples.
+- **User vocabulary follow-ups (C7 + C8).**
+  - **C7.** Log rotation phrases ("rotate the log", "trim my work log", "compact the work log") map to `collab-rotate-log.sh <self>`.
+  - **C8.** Framework upgrade phrases ("update the framework", "get the latest version", "is there a new version") map to the upgrade flow.
+- **`collab-register --type/--owner/--status` flags (Group H1).** Register files lacking frontmatter, or override frontmatter values when both are present.
+- **`collab-check --stats` (Group H2).** Per-agent diagnostic table: entries, log lines, open handoff count, archive count. Plus total managed-file count from INDEX.
+- **~196 new test cases** across new test files: `test-collab-init-upgrade-v040`, `test-collab-rotate-log`, `test-vocabulary`, `test-marker-warnings`, `test-cleanliness-check`, `test-backup-restore`, `test-migration-logging`, `test-diff-flag`, `test-ai-agents-md-cap`, `test-h-flags`, `test-upgrade-notes`. Plus extensions to existing test files.
 
 ### Documentation
-- README, SKILL.md, and `docs/plans/2026-04-25-v0.4.0-plan.md` reflect the calling-agent-only model and the upgrade path from v0.3.0.
+- README, SKILL.md, `docs/plans/2026-04-25-v0.4.0-plan.md` reflect the calling-agent-only model, the upgrade path from v0.3.0, and the marker safety conventions.
+- `CLAUDE.md` (project-level) added with permission-to-execute rules, testing discipline, and project layout reminders.
 
 ## 0.3.0 — 2026-04-23
 

@@ -8,9 +8,22 @@ v0.4.0 — calling-agent-only bootstrap, log rotation, vocabulary symmetry. See 
 
 ## What's new in v0.4.0
 
-- **Calling-agent-only bootstrap** — `init` materializes only the agent that ran it. Other agents arrive via `join`. Detection probes env vars; falls back to `--agent <name>` or `$COLLAB_AGENT`; hard-fails with guidance when nothing matches. Existing v0.3.0 repos can prune unused agents on upgrade (interactive prompt).
-- **Dynamic adapter table** — `Current Adapters` section in `AI_AGENTS.md` is rendered from `.collab/agents.d/` and re-rendered on every `init`/`join`/migration.
-- **Migration `0.3.0 → 0.4.0`** — detects agents with seed-only work logs, prompts to prune. Default-keep when non-interactive.
+- **Calling-agent-only bootstrap** — `init` materializes only the agent that ran it. Detection probes env vars; falls back to `--agent <name>` or `$COLLAB_AGENT`; hard-fails with guidance when nothing matches. Other agents arrive via `join`.
+- **Dynamic adapter table** — `Current Adapters` section in `AI_AGENTS.md` is rendered from `.collab/agents.d/` and re-rendered on every init/join/migration.
+- **Work-log rotation** — `collab-rotate-log.sh <agent>` archives older entries (default: 300-line threshold, keep 8 entries) preserving Receipts as one-line summaries and open handoff blocks verbatim. CRLF + `## subsection` aware.
+- **Handoff pickup verb + vocabulary** — `collab-handoff pickup <id> --from <self>` prints summary + stamps `picked-up:`. Sender phrases ("wrap up for handoff") and receiver phrases ("take the baton") documented in PROTOCOL.md. Group `to: any` handoffs supported.
+- **Upgrade communication** — migrations emit `>>> Upgrade summary:` blocks; the upgrade chain writes `.collab/UPGRADE_NOTES.md` for the next agent to read. `collab-init --ack-upgrade` archives it. `collab-check` surfaces it at top of output.
+- **Migration safety** — auto-backup on upgrade (`.collab/backup/...`), `--restore <id>`, `--diff` (preview migrations without applying), `--force-dirty` override for the new pre-migration cleanliness check. Loud BEFORE/AFTER per-file logging.
+- **Marker warnings** — every framework-managed `<!-- collab:NAME:start -->` block now has an inline warning comment; `AI_AGENTS.md` ships a `collab:customization-guide` section explaining the edit-outside-markers convention.
+- **Post-compact ritual** — explicit guidance in AI_AGENTS.md for what to re-read after auto-compaction. Optional Claude `PreCompact` hook template.
+- **Commit cadence rule** — `Cadence` bullet under AI_AGENTS.md `Commits` formalizes the "commit only on user request or task boundaries" convention.
+- **Critical rules inlined into AGENTS.md** — Receipt requirement, read-before-modify, commit cadence, post-compact pointer surfaced in the auto-discovered front-door file.
+- **`AI_AGENTS.md` trimmed to ≤100 lines** — verbose explanations relocated to `docs/design.md` (already reference-only); load-bearing rules retained inline.
+- **User vocabulary** — natural-language phrases for rotation ("rotate the log") and upgrade ("update the framework") map to commands.
+- **`collab-register --type/--owner/--status` flags** — register files that lack frontmatter, or override frontmatter values.
+- **`collab-check --stats`** — per-agent diagnostic table with entries, log lines, open handoffs, archive counts.
+- **0.3.0 → 0.4.0 migration** — interactive prune of agents with seed-only work logs. Calling agent is never flagged.
+- **~196 new tests.**
 
 ## What v0.3.0 shipped
 
@@ -112,7 +125,40 @@ npx @gpgaoplane/multi-agent-collab init
 
 The bootstrap detects the previous version and runs the full migration chain (e.g. v0.1.0 → v0.4.0 runs `0.1.0-to-0.2.0.sh`, `0.2.0-to-0.3.0.sh`, `0.3.0-to-0.4.0.sh` in order). User content outside marker sections is preserved.
 
-**Upgrading from v0.3.0 to v0.4.0.** The 0.3.0→0.4.0 migration detects agents that were auto-installed but never used (work logs with no real entries). It prompts per-agent in interactive sessions, defaulting to *keep*. Non-interactive runs (CI, no tty, or `COLLAB_MIGRATE_NONINTERACTIVE=1`) keep all agents. Override with `COLLAB_MIGRATE_REMOVE_ALL_SEED=1` to prune all flagged seed-only agents non-interactively (destructive).
+### Upgrading from v0.3.0 to v0.4.0 — step by step
+
+In each repo bootstrapped at v0.3.0:
+
+1. **Commit or stash any in-flight work.** v0.4.0 runs a cleanliness check at the start of upgrades and refuses to proceed on a dirty working tree (override with `--force-dirty` if you really want to mix the diffs).
+2. **(Optional) Preview the migration without applying it:**
+   ```bash
+   npx @gpgaoplane/multi-agent-collab init -- --diff
+   ```
+   Prints unified-diff hunks per changed file, then restores the repo to its pre-migration state. Doesn't keep any UPGRADE_NOTES.md or backup directory behind.
+3. **Run the upgrade:**
+   ```bash
+   npx @gpgaoplane/multi-agent-collab init
+   ```
+   - **Auto-backup** runs first: snapshots all framework-managed files into `.collab/backup/0.3.0-to-0.4.0-<timestamp>/`. Disable with `--no-backup` if you don't want it.
+   - **Migration prompts** appear if the 0.3.0→0.4.0 migration detects agents with seed-only work logs (no real entries). Per-agent yes/no, default *keep*. The calling agent is never flagged. Non-interactive contexts (CI, no tty, `COLLAB_MIGRATE_NONINTERACTIVE=1`) skip the prompts and keep everything. To prune all flagged seed-only agents non-interactively (destructive, intentional), set `COLLAB_MIGRATE_REMOVE_ALL_SEED=1`.
+   - **`>>> Upgrade summary:`** blocks print to stdout listing what each migration changed.
+   - **`.collab/UPGRADE_NOTES.md`** is written. Status `transient` — the next agent to start a session reads it, follows the post-upgrade ritual, then runs `collab-init --ack-upgrade` to archive it.
+4. **Rollback if anything looks wrong:**
+   ```bash
+   bash scripts/collab-init.sh --restore latest
+   ```
+   Or `--restore <specific-backup-id>` to pick a particular backup directory.
+
+### Natural-language phrases agents understand (v0.4.0+)
+
+You can speak any of these to a Claude/Codex/Gemini session in a bootstrapped repo and the agent runs the right command:
+
+- **Upgrade:** "update the framework", "get the latest version", "is there a new version" (check-only), "update multi-agent-collab".
+- **Rotation:** "rotate the log", "trim my work log", "compact the work log", "archive old entries", "the log is getting long".
+- **Handoff (sender):** "wrap up for handoff", "prepare handoff to <agent>", "tag out to <agent>".
+- **Handoff (receiver):** "take the baton", "pick up handoff", "take over from <agent>", "you're up".
+
+Full vocabulary contract in `templates/collab/PROTOCOL.md`.
 
 ## Flags (all channels)
 

@@ -38,10 +38,13 @@ assert_eq "0.3.0" "$ver"
 start_test "backup directory contains a RESTORE.md file"
 [[ -f "$backup_dir/RESTORE.md" ]] && ok || fail "RESTORE.md missing"
 
-start_test "backup file content matches pre-upgrade live file (byte-equal AI_AGENTS.md)"
-# The current AI_AGENTS.md has been rewritten by the upgrade; the backup has
-# the v0.3.0 content. They MUST differ now.
-diff -q "$backup_dir/AI_AGENTS.md" "$TARGET/AI_AGENTS.md" >/dev/null 2>&1 && fail "backup and current are identical (upgrade didn't refresh?)" || ok
+start_test "backup VERSION captures pre-upgrade value while live VERSION advances"
+# Synthetic bootstrap uses current-version templates for both before/after, so
+# many file CONTENTS won't actually change. VERSION is the load-bearing
+# differential: backup retains 0.3.0, live moves to shipped.
+backup_ver=$(cat "$backup_dir/.collab/VERSION" | tr -d '[:space:]')
+live_ver=$(cat "$TARGET/.collab/VERSION" | tr -d '[:space:]')
+[[ "$backup_ver" == "0.3.0" && "$live_ver" != "0.3.0" ]] && ok || fail "expected backup=0.3.0, live!=0.3.0; got backup=$backup_ver live=$live_ver"
 
 # --- --restore latest reverses ---
 start_test "--restore latest restores AI_AGENTS.md to pre-upgrade state"
