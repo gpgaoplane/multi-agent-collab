@@ -128,28 +128,34 @@ After the user clarified that quota was fully refreshed, the rest of the plan wa
 4. **G2 (trim cap)** — hit exactly 100 lines (plan target). The customization-guide example uses an `example:section-name` placeholder rather than a real marker name to avoid confusing the duplicate-marker test.
 5. **`AI_AGENTS.md` trim path** — `refresh_managed_sections` only refreshes existing sections; it does NOT auto-add new marker blocks (e.g. `customization-guide`) on re-init. Documented in test as expected behavior. Users on v0.3.0 → v0.4.0 will get the new block via the migration's `re_init_shared` path → AI_AGENTS.md is ULTIMATELY refreshed because it's a single-template-source rewrite, not a section-by-section refresh — but on a re-init within v0.4.0 that has manually stripped the customization-guide block, the block won't be re-injected. Edge case; non-blocking.
 
-**Open questions for you:**
+### Release verification (2026-04-26, post-tag)
 
-1. **Tag `v0.4.0` now or wait?** Tag triggers npm publish via the existing `publish.yml` GitHub Action. All work is on `main`. Recommend testing the published artifact in a real bootstrapped repo first if you're cautious; tag immediately if you trust the green test suite.
-2. **Backup pruning policy?** v0.4.0 ships `--restore` but no `--prune-backups`. After multiple upgrades a repo will accumulate `.collab/backup/<timestamp>/` directories. Defer to v0.5.0? Document `git clean .collab/backup/*` as the manual workaround in the meantime?
-3. **Auto-detection env-var list correctness?** The detection ladder probes `CLAUDECODE`, `CLAUDE_CODE_SSE_PORT`, `CLAUDE_CODE_OAUTH_TOKEN`; `CODEX_HOME`, `CODEX_CLI`; `GEMINI_CLI`, `GEMINI_API_KEY`, `GOOGLE_AI_API_KEY`. If real-world detection misses cases on your end (e.g. Codex CLIs that don't set those vars), name the right ones and I'll widen.
-4. **Detection probe for `ANTHROPIC_API_KEY`?** I deliberately excluded this because many users have it in their general environment without indicating an active Claude Code session. If you'd like a more permissive Claude detection, say so and I'll add it.
+After the user pushed `git tag v0.4.0 && git push origin v0.4.0`, all three release surfaces verified clean:
 
-**Things explicitly NOT done (deferred or out of scope):**
-- v0.4.0 git tag (your call).
-- Backup pruning command.
+| Surface | Result |
+|---|---|
+| GitHub origin tag | `v0.4.0 → 331c0ff` (the final docs-sweep commit) |
+| GitHub Actions `publish.yml` | run `24968159835` completed in 1m3s (success) |
+| npm registry | `@gpgaoplane/multi-agent-collab@0.4.0` published at `2026-04-26T22:03:57Z` |
+
+**v0.4.0 is live.** `npx @gpgaoplane/multi-agent-collab init` from any v0.3.0 install will trigger the upgrade path.
+
+### Open questions still pending decision
+
+1. ~~**Tag `v0.4.0` now or wait?**~~ **RESOLVED 2026-04-26.** User tagged + pushed; npm publish succeeded.
+
+2. **Backup pruning policy?** v0.4.0 ships `--restore` but no `--prune-backups`. After multiple upgrades a repo will accumulate `.collab/backup/<timestamp>/` directories. Two options for v0.5.0: (a) ship a `collab-init --prune-backups [--keep N]` flag, or (b) document `rm -rf .collab/backup/<timestamp>/` as the manual workaround and leave it manual. **No urgency** — backups are small and not on any agent read path.
+
+3. **Auto-detection env-var list correctness?** The detection ladder probes `CLAUDECODE`, `CLAUDE_CODE_SSE_PORT`, `CLAUDE_CODE_OAUTH_TOKEN` for Claude; `CODEX_HOME`, `CODEX_CLI` for Codex; `GEMINI_CLI`, `GEMINI_API_KEY`, `GOOGLE_AI_API_KEY` for Gemini. If real-world detection misses cases on your end (e.g. Codex CLIs that don't set those vars in your shell), name the right ones and I'll widen the probe in a v0.4.1 patch.
+
+4. **Detection probe for `ANTHROPIC_API_KEY`?** Currently excluded — many users have it in their general environment without indicating an active Claude Code session, so it would over-match. If you'd prefer permissive Claude detection at the cost of false positives, say so and I'll add it (with a warning in the README).
+
+### Things explicitly NOT done (deferred or out of scope)
+
+- Backup pruning command (open question #2 above).
 - The v0.5.0+ deferred items: auto-install hooks by default, presence-required mode, native Windows bash-free path, `collab-check --token-budget`, CLAUDE.md auto-management at `~/.claude` level (separate from `docs/agents/claude.md` work logs which Group B handles).
 
-**Quick-resume prompt if you want another agent to ship v0.4.0 from here:**
+### What to tell users with v0.3.0 installs
 
-```
-Read docs/plans/2026-04-25-v0.4.0-plan.md and docs/plans/2026-04-26-autonomous-run-status.md.
-All plan items are committed on origin/main. To ship: review the green CI on GitHub,
-then push git tag v0.4.0 to trigger npm publish via .github/workflows/publish.yml.
-Verify the published package's README and CHANGELOG read correctly. If anything
-looks off, the auto-backup mechanism (M3) lets you sandbox-test by upgrading a
-copy with --diff first.
-```
-
-That single prompt is enough to ship v0.4.0 cleanly.
+> Run `npx @gpgaoplane/multi-agent-collab init` in your repo. The upgrade is interactive and prompts before pruning unused agents. Auto-backup runs first, so `--restore latest` rolls back if anything looks wrong. Or preview without applying: `npx @gpgaoplane/multi-agent-collab init -- --diff`. See README's "Upgrading from v0.3.0 to v0.4.0 — step by step" for the full walkthrough.
 
