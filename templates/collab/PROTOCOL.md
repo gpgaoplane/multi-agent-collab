@@ -98,6 +98,41 @@ Agent action: run `./scripts/collab-catchup.sh preview --agent <self> --handoff`
 
 See `docs/handoff-schema.md` for the full block format and state machine.
 
+## Log rotation vocabulary (universal)
+
+When a work log grows past the threshold (default 300 lines), the user will not always remember the exact command. These phrases are a contract: any agent hearing them runs the rotation command.
+
+**User says** (any of):
+- "the log is getting long, let's compact it"
+- "rotate the log" / "rotate my log"
+- "summarize old entries"
+- "trim my work log" / "trim the log"
+- "archive old entries"
+- "this log is getting heavy, clean it up"
+- "compact the work log"
+
+**Agent action:** run `./scripts/collab-rotate-log.sh <self>` (use your own agent name). Confirm with the printed summary line. If `collab-check` previously surfaced a rotation advisory naming a specific log, that's the one to rotate.
+
+**Sanity rule:** never rotate another agent's log on the user's verbal request alone — rotation rewrites a log, and rewriting another agent's memory violates the cross-agent courtesy rule. If the user means another agent, ask them to switch to that agent (or have that agent run rotation themselves).
+
+## Framework upgrade vocabulary (universal)
+
+When a newer skill version is available (or the user wants to check), these phrases trigger the upgrade flow.
+
+**User says** (any of):
+- "update the framework" / "upgrade the collab framework"
+- "get the latest version" / "pull the latest"
+- "check for updates and apply"
+- "update multi-agent-collab"
+- "is there a new version" (this one runs the check only — no apply)
+
+**Agent action:**
+1. Run `bash scripts/collab-check.sh` first — its update advisory reports if a newer version exists. If "is there a new version" was the trigger, stop here and report.
+2. Run `npx @gpgaoplane/multi-agent-collab init` (or `bash <local-clone>/scripts/collab-init.sh` if working from a local clone). Migration prompts appear.
+3. After migration completes, follow the **post-upgrade ritual** below: read `.collab/UPGRADE_NOTES.md`, re-read `AI_AGENTS.md` `behavioral-rules`, then run `bash scripts/collab-init.sh --ack-upgrade`.
+
+**Sanity rule:** if the working tree is dirty, the upgrade will block (M2 cleanliness check). Commit or stash uncommitted work before triggering an upgrade.
+
 ## Post-upgrade ritual
 
 When the framework is upgraded (a `collab-init` run produced `.collab/UPGRADE_NOTES.md`), the first agent to enter the next session must:
