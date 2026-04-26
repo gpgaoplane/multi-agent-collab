@@ -1,16 +1,68 @@
 #!/usr/bin/env bash
 # Audit INDEX against filesystem. Prints mismatches and exits non-zero if any.
 # Scans under .claude/, .codex/, .gemini/, docs/agents/, .collab/ (excluding archive/).
+#
+# Flags:
+#   --stats    print per-agent stats (entry counts, log size, archive coverage)
+#              instead of running the audit
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 source "$HERE/lib/frontmatter.sh"
 source "$HERE/lib/index.sh"
 
+STATS_MODE=0
+case "${1:-}" in
+  --stats) STATS_MODE=1 ;;
+  -h|--help)
+    sed -n '1,12p' "$0"
+    exit 0
+    ;;
+esac
+
 INDEX=".collab/INDEX.md"
 if [[ ! -f "$INDEX" ]]; then
   echo "collab-check: $INDEX missing" >&2
   exit 2
+fi
+
+# --stats mode: emit per-agent stats and exit. Doesn't run the audit.
+if [[ $STATS_MODE -eq 1 ]]; then
+  echo "collab-check stats"
+  echo
+  printf '%-12s  %-7s  %-9s  %-12s  %-10s\n' "agent" "entries" "log lines" "open handoff" "archives"
+  printf '%-12s  %-7s  %-9s  %-12s  %-10s\n' "------------" "-------" "---------" "------------" "----------"
+  for desc in .collab/agents.d/*.yml; do
+    [[ -f "$desc" ]] || continue
+    base=$(basename "$desc" .yml)
+    [[ "$base" == _* ]] && continue
+    log=$(awk -F': *' '/^log_path:/ { print $2 }' "$desc")
+    entries=0
+    log_lines=0
+    open_handoffs=0
+    if [[ -f "$log" ]]; then
+      entries=$(grep -cE '^## 20[0-9]{2}-[0-9]{2}-[0-9]{2}T' "$log" 2>/dev/null || true)
+      log_lines=$(wc -l < "$log" | tr -d ' ')
+      # Open handoff = a handoff:start marker whose status line is "open".
+      open_handoffs=$(awk '
+        /<!-- collab:handoff:start id=/ { in_blk=1; st="" }
+        in_blk && /^- \*\*status:\*\*/ { st=$0 }
+        /<!-- collab:handoff:end -->/ { if (st ~ / open$/) c++; in_blk=0 }
+        END { print c+0 }
+      ' "$log")
+    fi
+    # ls exits 1 when the glob has no matches; pipefail propagates that and
+    # set -e would terminate the loop. `|| true` absorbs it.
+    archives=$(ls -1 ".collab/archive/agents/${base}-"*.md 2>/dev/null | wc -l | tr -d ' ' || true)
+    archives="${archives:-0}"
+    printf '%-12s  %-7s  %-9s  %-12s  %-10s\n' "$base" "$entries" "$log_lines" "$open_handoffs" "$archives"
+  done
+
+  # Total managed file count from INDEX.
+  total=$(awk -F'|' '/^\| [^-]/ && !/^\| path/ { c++ } END { print c+0 }' "$INDEX")
+  echo
+  echo "INDEX entries (total managed files): $total"
+  exit 0
 fi
 
 # Surface UPGRADE_NOTES.md at the top so it's the first thing the agent sees.
