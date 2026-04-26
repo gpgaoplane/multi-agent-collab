@@ -11,3 +11,9 @@
 # OS
 .DS_Store
 Thumbs.db
+
+# Session-local artifacts (never commit)
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+AI_HANDOFF.md
+RESUME_PROMPT.md
