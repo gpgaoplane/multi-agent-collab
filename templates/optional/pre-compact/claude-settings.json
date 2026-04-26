@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'post-compact: re-read AI_AGENTS.md behavioral-rules and your state.md before next substantive write. If a handoff was in flight, run collab-catchup.sh preview --agent <self> --handoff to surface it.'"
+          }
+        ]
+      }
+    ]
+  }
+}

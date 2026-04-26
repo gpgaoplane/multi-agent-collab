@@ -45,4 +45,32 @@ assert_file_contains "$TMP/AGENTS.md" "Custom section"
 count=$(grep -c '<!-- collab:agents-md:start -->' "$TMP/AGENTS.md" || true)
 assert_eq "1" "$count"
 
+# --- Group E: critical-rules section + post-compact ritual ---
+start_test "fresh AGENTS.md ships critical-rules section"
+assert_file_contains "$TMP2/AGENTS.md" "<!-- collab:critical-rules:start -->"
+assert_file_contains "$TMP2/AGENTS.md" "Receipt is required"
+assert_file_contains "$TMP2/AGENTS.md" "Read before modify"
+
+start_test "AI_AGENTS.md ships Post-compact ritual subsection"
+assert_file_contains "$TMP2/AI_AGENTS.md" "Post-compact ritual"
+
+start_test "re-init appends critical-rules to AGENTS.md that pre-dates it"
+TMP3=$(make_tmp_repo)
+cp -R "$SKILL_ROOT/scripts" "$TMP3/scripts"
+cp -R "$SKILL_ROOT/templates" "$TMP3/templates"
+# Simulate a v0.3.0-era AGENTS.md: only the agents-md section exists.
+(cd "$TMP3" && bash scripts/collab-init.sh) >/dev/null 2>&1
+# Strip critical-rules to imitate stale state.
+awk '/<!-- collab:critical-rules:start -->/,/<!-- collab:critical-rules:end -->/{next} {print}' "$TMP3/AGENTS.md" > "$TMP3/AGENTS.md.tmp"
+mv "$TMP3/AGENTS.md.tmp" "$TMP3/AGENTS.md"
+grep -q "critical-rules" "$TMP3/AGENTS.md" && fail "precondition: critical-rules should be stripped" || true
+(cd "$TMP3" && bash scripts/collab-init.sh) >/dev/null 2>&1
+grep -q "<!-- collab:critical-rules:start -->" "$TMP3/AGENTS.md" && ok || fail "re-init did not re-inject critical-rules"
+
+start_test "optional pre-compact template ships in templates/optional/"
+assert_file_exists "$SKILL_ROOT/templates/optional/pre-compact/README.md"
+assert_file_exists "$SKILL_ROOT/templates/optional/pre-compact/claude-settings.json"
+
+rm -rf "$TMP3"
+
 report

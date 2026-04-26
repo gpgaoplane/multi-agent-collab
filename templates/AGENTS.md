@@ -20,3 +20,14 @@ If `.collab/agents.d/<your-agent-name>.yml` does NOT exist:
 
 Skipping this step means you will step on other agents' files without logging your work. Do not skip.
 <!-- collab:agents-md:end -->
+
+<!-- collab:critical-rules:start -->
+## Critical rules (read these even if you only have AGENTS.md loaded)
+
+- **Receipt is required.** Every substantive task ends with a Task Receipt in your work log (`docs/agents/<self>.md`). See `.collab/PROTOCOL.md`.
+- **Read before modify.** Read a file's frontmatter before editing it. No blind writes.
+- **Commit cadence.** Commit only when the user asks, or at a clean task boundary with standing approval. One commit per task — never per-edit.
+- **Post-compact:** if your context just compacted, re-read `AI_AGENTS.md` behavioral-rules and your own `state.md` before the next substantive write.
+
+Full rules + onboarding checklist live in `AI_AGENTS.md`.
+<!-- collab:critical-rules:end -->

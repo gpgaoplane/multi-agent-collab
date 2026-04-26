@@ -247,20 +247,30 @@ inject_agents_md_section() {
     return 0
   fi
 
-  if merge_has_section "$target" "agents-md"; then
+  # If the legacy single-section file pre-dates a section that's now in the
+  # template, append the missing section. For sections present in both, refresh.
+  local sections
+  sections=$(grep -oE '<!-- collab:[a-z-]+:start -->' "$template" | sed -E 's/<!-- collab:([a-z-]+):start -->/\1/' | sort -u)
+
+  for section in $sections; do
     local new_content
-    new_content=$(awk -v start="<!-- collab:agents-md:start -->" -v end="<!-- collab:agents-md:end -->" '
+    new_content=$(awk -v start="<!-- collab:${section}:start -->" -v end="<!-- collab:${section}:end -->" '
       $0 == start { in_sec = 1; next }
       $0 == end { in_sec = 0; next }
       in_sec { print }
     ' "$template")
-    merge_replace_section "$target" "agents-md" "$new_content"
-  else
-    {
-      echo
-      cat "$template"
-    } >> "$target"
-  fi
+    if merge_has_section "$target" "$section"; then
+      merge_replace_section "$target" "$section" "$new_content"
+    else
+      # Append the section verbatim from template (start marker + body + end marker).
+      {
+        echo
+        echo "<!-- collab:${section}:start -->"
+        printf '%s\n' "$new_content"
+        echo "<!-- collab:${section}:end -->"
+      } >> "$target"
+    fi
+  done
 }
 
 install_pre_commit_hook() {

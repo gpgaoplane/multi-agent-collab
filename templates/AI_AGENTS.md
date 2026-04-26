@@ -108,6 +108,12 @@ Skip any step whose file's frontmatter `status != active`.
 ### Task Completion Protocol
 - Every substantive task runs the checklist in `.collab/PROTOCOL.md` and emits a Receipt.
 - Trivial tasks use the short-form Receipt.
+
+### Post-compact ritual
+When context is auto-compacted mid-session, the conversation summary survives but tool results, in-flight reasoning, and recently-read files do not. Before the next substantive write:
+- Re-read this section (Behavioral Rules) and your own `state.md`.
+- Treat the resumed task like a new session for fan-out: walk the Protocol checklist as if onboarding.
+- If a handoff was in flight, run `./scripts/collab-catchup.sh preview --agent <self> --handoff` to surface it again.
 <!-- collab:behavioral-rules:end -->
 
 ---
