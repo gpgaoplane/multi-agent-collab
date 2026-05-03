@@ -9,9 +9,9 @@ skip-if: "you want the soft-warning default and do not need hard-fail enforcemen
 
 # Optional Enforcement Hooks
 
-## Portable pre-commit receipt hook (v0.3.0+)
+## Portable pre-commit receipt hook (v0.3.0+; rendered self-contained in v0.4.2+)
 
-The portable hook works for any agent that writes to `docs/agents/<name>.md`. It ships in every install at `scripts/hooks/pre-commit` and is installed into `.git/hooks/` via the `--install-hooks` flag:
+The portable hook works for any agent that writes to `docs/agents/<name>.md`. The skill ships a template at `scripts/hooks/pre-commit.template` and a verification helper at `scripts/lib/receipt.sh`. At install time these are combined — the helper body is inlined into the rendered hook — so the installed `.git/hooks/pre-commit` has zero dependency on any path under `scripts/` in the user's repo. This makes the hook work identically for npm-installed users (no `scripts/` dir at repo root) and direct-clone users.
 
 ```bash
 # At bootstrap time:
@@ -22,7 +22,7 @@ bash scripts/collab-init.sh --install-hooks
 
 Behavior:
 
-- Runs on every commit. For each staged change under `docs/agents/*.md`, it invokes `scripts/collab-verify-receipt.sh`.
+- Runs on every commit. For each staged change under `docs/agents/*.md`, it invokes the inlined `verify_receipt` function (no external script call).
 - The verifier checks that the staged diff **adds** a new `### Task Receipt` heading. Stale receipts from prior commits do not satisfy the check (this is the diff-based improvement over v0.1.0's presence-based check).
 - Default mode: **soft-warn** — prints a warning to stderr and allows the commit. Controlled by `.collab/config.yml`:
 
@@ -32,7 +32,7 @@ Behavior:
   ```
 
 - Preserves any pre-existing `.git/hooks/pre-commit` as `.git/hooks/pre-commit.local` and delegates to it after the managed check. Re-running `--install-hooks` is idempotent.
-- Detects its own installation via the `# collab:managed-hook` sentinel on line 2 of the hook — this is how idempotency avoids clobbering a user hook on re-run.
+- Detects its own installation via the `# collab:managed-hook` sentinel on line 2 of the hook — this is how idempotency avoids clobbering a user hook on re-run. The `# {{INLINE_RECEIPT_LIB}}` placeholder on line 3 of the template (substituted at install time) sits AFTER the sentinel, never before, so re-install detection remains stable.
 
 Uninstall:
 

@@ -16,8 +16,18 @@ bash "$SKILL_ROOT/scripts/collab-init.sh" --install-hooks >/dev/null 2>&1
 start_test "managed hook has the collab:managed-hook sentinel"
 grep -q "^# collab:managed-hook" .git/hooks/pre-commit && ok || fail "sentinel missing"
 
-start_test "managed hook invokes collab-verify-receipt"
-grep -q "collab-verify-receipt" .git/hooks/pre-commit && ok || fail "verify-receipt call missing"
+start_test "managed hook invokes verify_receipt (inlined function, no external script)"
+grep -q "verify_receipt " .git/hooks/pre-commit && ok || fail "verify_receipt call missing"
+
+start_test "v0.4.2: managed hook has inlined verify_receipt() body (no external dep)"
+grep -q "^verify_receipt() {" .git/hooks/pre-commit && ok || fail "inlined verify_receipt definition missing"
+
+start_test "v0.4.2: managed hook does NOT reference scripts/collab-verify-receipt.sh"
+! grep -q "bash scripts/collab-verify-receipt" .git/hooks/pre-commit && ok || fail "hook still references external script"
+
+start_test "v0.4.2: managed-hook sentinel still on line 2 after templating"
+sentinel_line=$(grep -n "^# collab:managed-hook" .git/hooks/pre-commit | head -1 | cut -d: -f1)
+[[ "$sentinel_line" == "2" ]] && ok || fail "sentinel on line $sentinel_line (expected 2)"
 
 start_test "collab config.yml is created with strict: false default"
 [[ -f .collab/config.yml ]] && grep -qE '^strict:\s*false' .collab/config.yml && ok || fail "config.yml missing or wrong default"

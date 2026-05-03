@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# collab:managed-hook v0.3.0
+# collab:managed-hook v0.4.2
+# {{INLINE_RECEIPT_LIB}}
 # Pre-commit hook installed by `collab-init --install-hooks`.
-# For every staged file under docs/agents/<name>.md, run collab-verify-receipt.
+# For every staged file under docs/agents/<name>.md, run verify_receipt.
 # Soft-warns by default; exits non-zero only when .collab/config.yml: strict: true.
-# DO NOT EDIT — edit scripts/hooks/pre-commit in the skill source instead.
-# The `collab:managed-hook` sentinel above is used to detect our own hook on
-# re-install; any change to that first-line sentinel will break idempotency.
+# DO NOT EDIT — edit scripts/hooks/pre-commit.template in the skill source instead.
+# The `collab:managed-hook` sentinel on line 2 is used to detect our own hook on
+# re-install; any change to that line will break idempotency. The placeholder on
+# line 3 is replaced by the body of scripts/lib/receipt.sh during install.
 set -euo pipefail
 
 STRICT=0
@@ -20,7 +22,7 @@ while IFS= read -r path; do
     docs/agents/*.md) ;;
     *) continue ;;
   esac
-  if ! bash scripts/collab-verify-receipt.sh "$path" 2>/dev/null; then
+  if ! verify_receipt "$path" 2>/dev/null; then
     echo "pre-commit: $path lacks a Task Receipt block." >&2
     fails=$((fails + 1))
   fi

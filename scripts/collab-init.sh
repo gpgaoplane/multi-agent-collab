@@ -320,7 +320,8 @@ inject_agents_md_section() {
 }
 
 install_pre_commit_hook() {
-  local src="$SKILL_ROOT/scripts/hooks/pre-commit"
+  local src="$SKILL_ROOT/scripts/hooks/pre-commit.template"
+  local lib="$SKILL_ROOT/scripts/lib/receipt.sh"
   local dest=".git/hooks/pre-commit"
 
   if [[ ! -d .git/hooks ]]; then
@@ -329,8 +330,13 @@ install_pre_commit_hook() {
   fi
 
   if [[ $DRY_RUN -eq 1 ]]; then
-    say "would install $src -> $dest"
+    say "would install $src -> $dest (with $lib inlined)"
     return 0
+  fi
+
+  if [[ ! -f "$src" ]] || [[ ! -f "$lib" ]]; then
+    say "install-hooks: missing template or lib (src=$src lib=$lib)" >&2
+    return 1
   fi
 
   # Preserve existing hook if the installed one is not already ours.
@@ -342,8 +348,23 @@ install_pre_commit_hook() {
     say "preserved existing pre-commit as .git/hooks/pre-commit.local"
   fi
 
-  cp "$src" "$dest"
+  # Render: substitute the `# {{INLINE_RECEIPT_LIB}}` placeholder line with the
+  # body of scripts/lib/receipt.sh (shebang stripped). The placeholder MUST sit
+  # AFTER the `# collab:managed-hook` sentinel so the sentinel stays on line 2
+  # and re-install detection at the top of this function still works.
+  awk -v lib="$lib" '
+    /^# \{\{INLINE_RECEIPT_LIB\}\}$/ {
+      while ((getline line < lib) > 0) {
+        if (line ~ /^#!/) continue   # skip shebang
+        print line
+      }
+      close(lib)
+      next
+    }
+    { print }
+  ' "$src" > "$dest"
   chmod +x "$dest"
+
   # If a .local exists, append a single delegation block so it still runs.
   # The block is marked with `# collab:delegation` so test suites can count
   # occurrences (exactly one expected after any number of re-runs).
