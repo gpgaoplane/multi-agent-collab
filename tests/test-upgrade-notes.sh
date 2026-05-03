@@ -61,11 +61,19 @@ start_test "ack-upgrade is idempotent (no-op when no notes file)"
 out4=$( (cd "$TARGET" && bash scripts/collab-init.sh --ack-upgrade) 2>&1)
 echo "$out4" | grep -q "nothing to do" && ok || fail "expected idempotent no-op: $out4"
 
-# --- Concurrent ack: simulate by re-creating UPGRADE_NOTES.md and acking when archived already exists ---
-start_test "ack-upgrade handles already-archived case (no overwrite)"
-echo "test" > "$TARGET/.collab/UPGRADE_NOTES.md"
+# --- v0.4.2 (G5): re-ack creates a NEW timestamped archive, never clobbers ---
+# (Schema changed in v0.4.2: archives are UPGRADE_NOTES-<from>-to-<to>-<HMS>.md
+# so multiple archives per day are supported by design.)
+start_test "v0.4.2: subsequent ack of a new UPGRADE_NOTES creates a distinct archive"
+echo "test placeholder" > "$TARGET/.collab/UPGRADE_NOTES.md"
 out5=$( (cd "$TARGET" && bash scripts/collab-init.sh --ack-upgrade) 2>&1)
-echo "$out5" | grep -q "already archived" && [[ ! -f "$TARGET/.collab/UPGRADE_NOTES.md" ]] && ok || fail "concurrent ack did not handle existing archive: $out5"
+[[ ! -f "$TARGET/.collab/UPGRADE_NOTES.md" ]] && \
+  echo "$out5" | grep -q "archived UPGRADE_NOTES.md to" && ok || \
+  fail "second ack did not produce a distinct archive: $out5"
+
+start_test "v0.4.2: archive count grows with each ack"
+archive_count=$(ls "$TARGET/.collab/archive/UPGRADE_NOTES-"*.md 2>/dev/null | wc -l | tr -d ' ')
+[[ "$archive_count" -ge "2" ]] && ok || fail "expected >=2 archives, got $archive_count"
 
 # --- Post-upgrade ritual is documented in PROTOCOL.md ---
 start_test "PROTOCOL.md documents Post-upgrade ritual"

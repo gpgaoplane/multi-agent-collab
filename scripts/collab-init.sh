@@ -570,6 +570,46 @@ do_restore() {
   fi
 }
 
+# G5 (v0.4.2): archive a transient UPGRADE_NOTES.md to a richer-named file.
+# Schema: .collab/archive/UPGRADE_NOTES-<from>-to-<to>-<YYYYMMDDHHMMSS>.md
+# Used by both --ack-upgrade and the auto-archive-on-re-upgrade path so
+# their outputs are uniformly named. Atomic via mv; uniquifies with $$ if
+# two archivers race within the same second.
+# Args: <source-path> [from-version] [to-version]
+# Echoes the archive path on stdout (empty if source missing).
+archive_upgrade_notes() {
+  local source="${1:-.collab/UPGRADE_NOTES.md}"
+  local from="${2:-}"
+  local to="${3:-}"
+
+  [[ -f "$source" ]] || return 0
+
+  # Parse from/to from the file's "# Upgrade Notes — X.Y.Z → A.B.C" header
+  # if not provided by the caller.
+  if [[ -z "$from" || -z "$to" ]]; then
+    local header
+    header=$(grep -E '^# Upgrade Notes' "$source" 2>/dev/null | head -1 || true)
+    if [[ "$header" =~ ([0-9]+\.[0-9]+\.[0-9]+).*([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+      from="${from:-${BASH_REMATCH[1]}}"
+      to="${to:-${BASH_REMATCH[2]}}"
+    fi
+  fi
+  from="${from:-unknown}"
+  to="${to:-unknown}"
+
+  mkdir -p .collab/archive
+  local stamp
+  stamp=$(date -u +%Y%m%d%H%M%S)
+  local dest=".collab/archive/UPGRADE_NOTES-${from}-to-${to}-${stamp}.md"
+  if [[ -e "$dest" ]]; then
+    # Same-second collision (concurrent ack/upgrade). Disambiguate via PID.
+    dest="${dest%.md}-$$.md"
+  fi
+  mv "$source" "$dest"
+  bash "$HERE/collab-register.sh" "$dest" >/dev/null 2>&1 || true
+  echo "$dest"
+}
+
 install_config() {
   local src="$TEMPLATES/config.yml"
   local dest=".collab/config.yml"
@@ -760,15 +800,11 @@ fi
 # .collab/backup/ stays self-cleaning. Override the keep count in config.yml.
 if [[ $ACK_UPGRADE -eq 1 ]]; then
   if [[ -f .collab/UPGRADE_NOTES.md ]]; then
-    mkdir -p .collab/archive
-    archived=".collab/archive/UPGRADE_NOTES-$(date +%Y%m%d).md"
-    if [[ -f "$archived" ]]; then
-      # Concurrent ack from a sibling session — file was already archived.
-      rm -f .collab/UPGRADE_NOTES.md
-      echo "ack-upgrade: UPGRADE_NOTES.md already archived; removed live copy."
-    else
-      mv .collab/UPGRADE_NOTES.md "$archived"
+    archived=$(archive_upgrade_notes .collab/UPGRADE_NOTES.md)
+    if [[ -n "$archived" ]]; then
       echo "ack-upgrade: archived UPGRADE_NOTES.md to $archived."
+    else
+      echo "ack-upgrade: archive produced no path (mv failed?); inspect .collab/ manually." >&2
     fi
   else
     echo "ack-upgrade: no UPGRADE_NOTES.md present; nothing to do."
@@ -906,6 +942,16 @@ EOF
     # what changed. Marked status: transient — agents read it, run the
     # post-upgrade ritual (re-read AI_AGENTS.md), then ack via --ack-upgrade.
     if [[ $DRY_RUN -eq 0 && -n "$upgrade_log" && -s "$upgrade_log" ]]; then
+      # G5: if a prior transient UPGRADE_NOTES exists (the previous upgrade
+      # wasn't acked), archive it FIRST so this write doesn't silently clobber
+      # it. Honor only files that still carry status: transient — anything
+      # else (e.g. a hand-written note) is left alone.
+      if [[ -f .collab/UPGRADE_NOTES.md ]] && grep -q '^status: transient' .collab/UPGRADE_NOTES.md 2>/dev/null; then
+        prior_archived=$(archive_upgrade_notes .collab/UPGRADE_NOTES.md)
+        if [[ -n "$prior_archived" ]]; then
+          echo "upgrade: prior UPGRADE_NOTES.md was unacked; archived to $prior_archived" >&2
+        fi
+      fi
       now=$(bash "$HERE/collab-now.sh")
       {
         printf -- '---\n'
