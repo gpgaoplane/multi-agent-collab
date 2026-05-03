@@ -95,6 +95,7 @@ for d in "${scan_dirs[@]}"; do
     case "$path" in
       .collab/archive/*) continue ;;
       .collab/backup/*) continue ;;
+      .collab/.migrations/*) continue ;;
       */.gitkeep) continue ;;
     esac
     if ! idx_get_row "$INDEX" "$path" | grep -q .; then
