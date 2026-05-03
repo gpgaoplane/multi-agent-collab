@@ -1,5 +1,56 @@
 # Changelog
 
+## 0.4.2 — 2026-05-03
+
+Correctness patch fixing nine post-ship issues surfaced by real-world use of v0.4.0 and v0.4.1. Mostly additive; one shipped-default change called out below. No file renames in user repos. Migrations are now idempotent — a re-run after an interrupted upgrade is a safe no-op.
+
+### Fixed (post-ship correctness)
+
+- **Rotation regex accepts date-only entry headers (G1).** `scripts/collab-rotate-log.sh:79` previously required a literal `T` after the date (`## 2026-04-28T...`), so logs with the more common date-only style (`## 2026-04-28 task title`) were silently never rotating regardless of file size. New regex: `^## 20[0-9]{2}-[0-9]{2}-[0-9]{2}([T ]|$)` — strict superset of the old contract; existing logs that worked still work, and date-only/freeform-suffix logs now rotate. The work-log seed template gains a worked entry-format example so future agents have a model to follow.
+- **`bin/cli.js` forwards all flags to bash for `init`/`join`/`archive`/`register` (G2).** Previously these four cases silently dropped every flag, so `npx ... init -- --agent codex`, `--diff`, `--restore latest`, `--prune-backups`, `--ack-upgrade`, `--install-hooks`, `--force-dirty`, `--no-backup`, `--dry-run`, and `register --type/--owner` were all unreachable through the npm channel. Fixed by forwarding `rest` to bash like `presence`/`catchup`/`handoff` already did. New `tests/test-npm-shim.sh` cases gate the regression.
+- **Pre-commit hook is self-contained (G3).** The installed `.git/hooks/pre-commit` previously hardcoded `bash scripts/collab-verify-receipt.sh`, which doesn't exist in npm-installed repos (no `scripts/` dir). Every staged `docs/agents/*.md` was reported as "lacks a Task Receipt" — soft-warn noise normally, hard commit blocks under `strict: true`. Restructured as template + render: `scripts/lib/receipt.sh` holds `verify_receipt()` once; `scripts/hooks/pre-commit.template` inlines it via `# {{INLINE_RECEIPT_LIB}}` substitution at install time. Result: the installed hook has zero external script dependency and works identically for npm-installed and direct-clone users.
+- **`do_restore` prunes migration-created files (G4).** `--restore latest` and `--diff` (apply-then-restore) silently leaked migration side effects (new descriptors, INDEX rows, memory files) into the post-restore state. Now walks the live framework-managed file set; for any path in live but not in the backup, removes via `rm -f` (handles symlinks correctly). Strict allowlist scoped to `collect_backup_paths()`; never recursive on directories; never touches `.collab/backup/`.
+- **`UPGRADE_NOTES.md` auto-archived on chained upgrades (G5).** A second upgrade run before `--ack-upgrade` previously overwrote the prior transient `UPGRADE_NOTES.md` silently — the first upgrade's notes were lost before any agent had read them. Now: before writing a new file, if a prior `status: transient` UPGRADE_NOTES exists, it's auto-archived first and a stderr notice surfaces the chain. Schema unified across both `--ack-upgrade` and the upgrade flow on `UPGRADE_NOTES-<from>-to-<to>-<YYYYMMDDHHMMSS>.md` (the date-only schema is replaced — see Changed below).
+- **`.collab/VERSION` format validated (G6).** Garbage content (typo, partial corruption, `latest`) silently triggered lexicographic compare and skipped migrations. Now hard-fails with guidance at `detect_mode`, naming the bad value and pointing at `--restore latest` for recovery. The validation runs AFTER the `--restore` short-circuit, so a corrupted VERSION never locks users out of recovery.
+- **Doubled marker blocks emit a loud warning (G7).** `merge_replace_section` previously silently corrupted files containing duplicate `<!-- collab:NAME:start -->` markers — the awk pass would print the body twice and leave the file in a `start, body, start, body, end` state with no diagnostic. Now counts both markers via `grep -cF`; emits `merge: WARNING <file>: marker block '<section>' is malformed (duplicate start|end markers, count=N)` to stderr and returns 1. Refresh paths in `collab-init.sh` tolerate the warning so init still completes (visible, not blocking) on already-corrupted files.
+- **Migrations are idempotent via sentinels (G8).** A re-run of the migration chain (after partial failure, manual re-trigger, or any path that re-enters the upgrade flow) previously double-applied operations or failed mid-chain. Now per-migration sentinel files at `.collab/.migrations/<from>-to-<to>.applied` record successful application with an ISO-8601 timestamp and a SHA-256 of the migration script body. The chain runner skips migrations whose sentinel matches; a SHA mismatch (script body changed in a future patch) re-runs. Legacy migrations on existing v0.4.x installs are auto-back-filled on first v0.4.2 upgrade — past migrations are NOT re-run. New `scripts/lib/sha.sh` shim picks `sha256sum` / `shasum -a 256` / `openssl dgst -sha256` in order, with a "no-sha-available" graceful-degrade for minimal shells (sentinel still written; SHA mismatch detection disabled). New `version_le` helper in `collab-init.sh` is numeric three-part compare (no v0.10.0 lex bug).
+- **`inject_agents_md_section` no-ops on orphan markers (G9).** If `AGENTS.md` had an orphan start marker (or end alone) — possible after a partial restore or hand-edit — the function would append a fresh block, producing the doubled-start corruption that G7 then detects on the next refresh. Now: detect orphan markers before append; emit `inject: WARNING ... orphan marker for section ... skipping append` to stderr; leave the file untouched.
+
+### Changed
+
+- **`rotate_keep_recent` shipped default lowered from 8 to 3** in `templates/config.yml`. Existing `.collab/config.yml` files are NOT auto-rewritten — the framework never rewrites user-owned config. Opt in by editing your `.collab/config.yml` line: `rotate_keep_recent: 3`. The change makes rotation more aggressive for new installs; old installs continue with whatever value they already have.
+- **`--ack-upgrade` archive filename schema is richer.** Was `UPGRADE_NOTES-YYYYMMDD.md` (date-only); now `UPGRADE_NOTES-<from>-to-<to>-<YYYYMMDDHHMMSS>.md`. Multiple archives per day are now structurally distinct, eliminating the "same-second collision" race that the prior code handled with an "already archived" message. Same-second collisions still get a `-$$` PID suffix as a defensive uniquifier.
+- **`scripts/hooks/pre-commit` renamed to `scripts/hooks/pre-commit.template`** (skill source only — no impact on installed hooks). Install-time substitution of `# {{INLINE_RECEIPT_LIB}}` produces the final hook.
+
+### Added
+
+- **`scripts/migrations/0.4.1-to-0.4.2.sh`.** No-op chain step that emits the `>>> Upgrade summary` block listing all G1–G9 outcomes. Writes its sentinel at `.collab/.migrations/0.4.1-to-0.4.2.applied` on completion.
+- **Test files.** `test-pre-commit-portable.sh` (8 cases), `test-merge-malformed-markers.sh` (7), `test-version-validation.sh` (5), `test-inject-dedup.sh` (9), `test-upgrade-notes-chain.sh` (10), `test-migration-idempotency.sh` (19). Plus extensions to `test-collab-rotate-log.sh`, `test-npm-shim.sh`, `test-install-hooks.sh`, `test-backup-restore.sh`, `test-upgrade-notes.sh`. ~80 net new test cases.
+
+### Notes for users on v0.4.1 (cli.js flag-drop bug)
+
+If you're on v0.4.1, `npx @gpgaoplane/multi-agent-collab init -- --diff` and similar flag-using commands silently dropped the flag and ran the default upgrade. To upgrade safely to v0.4.2, call bash directly so flags reach the bootstrap script:
+
+```bash
+# Preview the migration without applying:
+bash node_modules/@gpgaoplane/multi-agent-collab/scripts/collab-init.sh --diff
+
+# Apply the upgrade:
+bash node_modules/@gpgaoplane/multi-agent-collab/scripts/collab-init.sh
+
+# After reading .collab/UPGRADE_NOTES.md, ack:
+bash node_modules/@gpgaoplane/multi-agent-collab/scripts/collab-init.sh --ack-upgrade
+
+# Roll back if anything looks wrong:
+bash node_modules/@gpgaoplane/multi-agent-collab/scripts/collab-init.sh --restore latest
+```
+
+Once v0.4.2 is installed, the standard `npx @gpgaoplane/multi-agent-collab init -- --diff` (etc.) flow works because the cli.js shim now forwards flags correctly.
+
+### Notes for users on v0.3.0 or earlier
+
+The full chain (0.3.0 → 0.4.0 → 0.4.1 → 0.4.2) runs automatically. Auto-backup runs first; `--restore latest` rolls back if anything looks wrong. The 0.4.0 release notes still apply for the breaking calling-agent-only bootstrap change.
+
 ## 0.4.1 — 2026-04-26
 
 Additive patch. No state changes; re-init is sufficient on upgrade.

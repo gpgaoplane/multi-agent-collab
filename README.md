@@ -4,7 +4,41 @@ A reusable skill for bootstrapping consistent multi-agent collaboration in any G
 
 ## Status
 
-v0.4.1 — `default_agent` config key, backup pruning, hard-fail message expansion. Additive patch over v0.4.0. See [`docs/design.md`](docs/design.md) for the full rationale, [`docs/plans/2026-04-25-v0.4.0-plan.md`](docs/plans/2026-04-25-v0.4.0-plan.md) for the release plan, and [`CHANGELOG.md`](CHANGELOG.md) for release history.
+v0.4.2 — correctness patch on top of v0.4.1. Nine post-ship fixes: rotation regex accepts date-only headers, cli.js forwards all flags, pre-commit hook is self-contained, `--restore` prunes migration-created files, `UPGRADE_NOTES.md` is no longer overwritten silently on chained upgrades, `.collab/VERSION` is validated, doubled markers emit warnings, migrations are idempotent via sentinels, `inject_agents_md_section` no-ops on orphan markers. See [`CHANGELOG.md`](CHANGELOG.md) for the full release notes.
+
+## What's new in v0.4.2
+
+- **Rotation accepts date-only entry headers** — `## 2026-04-28 first task` now matches the rotation regex. Previously required full ISO datetime with `T`, so logs with date-only headers silently never rotated regardless of size. The work-log seed template gains a worked example so future agents follow a consistent format.
+- **`rotate_keep_recent` default lowered 8 → 3** in shipped `templates/config.yml`. Existing `.collab/config.yml` files are NOT auto-rewritten — opt in by editing your config line.
+- **`bin/cli.js` forwards all flags** for `init`/`join`/`archive`/`register`. Previously these silently dropped `--agent`, `--diff`, `--restore`, `--prune-backups`, `--ack-upgrade`, `--install-hooks`, `--force-dirty`, `--no-backup`, `--dry-run`, and `register --type/--owner` — every documented npm-channel example using these flags was broken. v0.4.1 users should call bash directly to upgrade (see below).
+- **Pre-commit hook is self-contained** — receipt-verify logic is inlined from `scripts/lib/receipt.sh` at install time. Works identically in npm-installed repos (no `scripts/` dir needed) and direct-clone repos. The installed hook has zero external script dependency.
+- **`--restore` prunes migration-created files** — `--diff` (apply-then-restore) and `--restore latest` no longer leak migration side effects. Strict allowlist scoped to `collect_backup_paths()`; never recursive on directories; `.collab/backup/` itself is never touched.
+- **`UPGRADE_NOTES.md` auto-archived on chained upgrades** — a second upgrade run before `--ack-upgrade` no longer overwrites the prior transient notes. Schema unified across both `--ack-upgrade` and the auto-archive path: `UPGRADE_NOTES-<from>-to-<to>-<YYYYMMDDHHMMSS>.md`.
+- **`.collab/VERSION` format validated** — garbage content (typo, partial corruption, `latest`) hard-fails with guidance. The validation runs AFTER the `--restore` short-circuit so corrupted VERSION never locks users out of recovery.
+- **Doubled marker blocks emit a loud warning** — `merge_replace_section` previously silently corrupted files with duplicate `<!-- collab:NAME:start -->` markers. Now: stderr WARNING + return 1; refresh paths tolerate so init still completes on already-corrupted files.
+- **Migrations are idempotent via sentinels** — per-migration sentinel files at `.collab/.migrations/<from>-to-<to>.applied` make the chain runner safe to re-enter. SHA-256 of the migration script body detects future patches that should re-trigger application. Legacy migrations on existing v0.4.x installs are auto-back-filled (NOT re-run). Portable SHA shim picks `sha256sum`/`shasum`/`openssl`.
+- **`inject_agents_md_section` no-ops on orphan markers** — defensive against the partial-restore path that previously produced doubled-start corruption.
+- **~80 new tests.**
+
+### Upgrading from v0.4.1 (cli.js flag-drop bug)
+
+If you're on v0.4.1, the cli.js shim silently drops every flag for `init`. Call bash directly so `--diff`/`--restore`/`--ack-upgrade` reach the bootstrap script:
+
+```bash
+# Preview the migration without applying:
+bash node_modules/@gpgaoplane/multi-agent-collab/scripts/collab-init.sh --diff
+
+# Apply the upgrade:
+bash node_modules/@gpgaoplane/multi-agent-collab/scripts/collab-init.sh
+
+# After reading .collab/UPGRADE_NOTES.md, ack:
+bash node_modules/@gpgaoplane/multi-agent-collab/scripts/collab-init.sh --ack-upgrade
+
+# Roll back if anything looks wrong:
+bash node_modules/@gpgaoplane/multi-agent-collab/scripts/collab-init.sh --restore latest
+```
+
+Once v0.4.2 is installed the standard `npx @gpgaoplane/multi-agent-collab init -- --diff` (etc.) flow works because the shim now forwards flags correctly.
 
 ## What's new in v0.4.1
 
