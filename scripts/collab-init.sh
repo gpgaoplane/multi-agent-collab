@@ -239,7 +239,8 @@ render_adapters_table() {
   done
 
   if [[ $DRY_RUN -eq 0 ]]; then
-    merge_replace_section "$target" "current-adapters" "$body"
+    # Tolerate doubled-marker warnings from G7 so init continues on corrupted files.
+    merge_replace_section "$target" "current-adapters" "$body" || true
   fi
 }
 
@@ -306,7 +307,15 @@ inject_agents_md_section() {
       in_sec { print }
     ' "$template")
     if merge_has_section "$target" "$section"; then
-      merge_replace_section "$target" "$section" "$new_content"
+      # Tolerate doubled-marker warnings from G7; the warning is on stderr so
+      # the user still sees corruption while the upgrade continues.
+      merge_replace_section "$target" "$section" "$new_content" || true
+    elif grep -q "<!-- collab:${section}:start -->" "$target" || \
+         grep -q "<!-- collab:${section}:end -->" "$target"; then
+      # G9: orphan marker present (start without end, or vice versa). Don't
+      # append a fresh block — that would create doubled markers. Leave the
+      # file untouched and surface a warning so the user can fix manually.
+      echo "inject: WARNING $target: orphan marker for section '$section'; skipping append (fix the file or restore a clean version)" >&2
     else
       # Append the section verbatim from template (start marker + body + end marker).
       {
@@ -721,7 +730,8 @@ refresh_managed_sections() {
       if [[ $DRY_RUN -eq 1 ]]; then
         say "would refresh section $section in $target"
       else
-        merge_replace_section "$target" "$section" "$new_content"
+        # Tolerate doubled-marker warnings from G7 so refresh continues on corrupted files.
+        merge_replace_section "$target" "$section" "$new_content" || true
       fi
     fi
   done
