@@ -31,6 +31,10 @@ first_size=$(wc -c < "$TARGET/.collab/UPGRADE_NOTES.md" | tr -d ' ')
 # --- Second upgrade WITHOUT ack: should auto-archive the first ---
 # Pretend we're going from 0.3.0 to current shipped, since the first upgrade left us at shipped.
 echo "0.3.0" > "$TARGET/.collab/VERSION"
+# G8 sentinels would make the second upgrade a no-op (correct behavior). Clear
+# them so this test exercises the real "second migration writes UPGRADE_NOTES,
+# G5 auto-archives the prior" path.
+rm -rf "$TARGET/.collab/.migrations"
 sleep 1   # ensure HMS timestamp differs
 out2=$( (cd "$TARGET" && COLLAB_MIGRATE_NONINTERACTIVE=1 bash scripts/collab-init.sh) 2>&1)
 
