@@ -58,4 +58,55 @@ echo "$out" | grep -q "via npx" && ok || fail "catchup via cli.js didn't surface
 cd "$SKILL_ROOT"
 rm -rf "$TARGET2"
 
+# --- v0.4.2: cli.js forwards flags to bash for init/join/archive/register ---
+
+# init --agent codex: should produce a codex-only install, no .claude/
+TARGET3=$(make_tmp_repo)
+start_test "v0.4.2: cli.js init forwards --agent flag (codex-only install)"
+(cd "$TARGET3" && node "$CLI" init --agent codex) >/dev/null 2>&1
+[[ -f "$TARGET3/.codex/CODEX.md" ]] && [[ ! -d "$TARGET3/.claude" ]] && ok || \
+  fail "expected codex-only install via --agent: claude=$([[ -d $TARGET3/.claude ]] && echo yes || echo no), codex=$([[ -f $TARGET3/.codex/CODEX.md ]] && echo yes || echo no)"
+
+# Bogus-flag forwarding test: if cli.js forwards, bash emits "Unknown arg"; if not, bash
+# silently runs default init. Use a fresh repo (no .collab) so bash doesn't otherwise act.
+TARGET4=$(make_tmp_repo)
+start_test "v0.4.2: cli.js init forwards arbitrary flags (bogus flag rejected by bash)"
+out=$( (cd "$TARGET4" && node "$CLI" init --bogus-flag-xyz 2>&1) || true)
+echo "$out" | grep -q "Unknown arg: --bogus-flag-xyz" && ok || fail "bogus flag didn't reach bash; got: $out"
+
+# init --dry-run: forwarded flag, AI_AGENTS.md should NOT be created.
+TARGET5=$(make_tmp_repo)
+start_test "v0.4.2: cli.js init forwards --dry-run flag (AI_AGENTS.md not written)"
+(cd "$TARGET5" && node "$CLI" init --dry-run) >/dev/null 2>&1
+[[ ! -f "$TARGET5/AI_AGENTS.md" ]] && ok || \
+  fail "expected --dry-run to skip writing AI_AGENTS.md"
+
+# register --type/--owner: flags should reach collab-register.sh
+TARGET6=$(make_tmp_repo)
+init_with_all_agents "$TARGET6" "$SKILL_ROOT"
+cd "$TARGET6"
+mkdir -p docs/manual
+cat > docs/manual/note.md <<'EOF'
+# Manual note
+
+Hand-written content with no frontmatter.
+EOF
+start_test "v0.4.2: cli.js register forwards --type/--owner flags (INDEX row reflects them)"
+node "$CLI" register docs/manual/note.md --type doc --owner claude >/dev/null 2>&1
+# Group H: register --type/--owner sets the values in the INDEX.md row.
+grep "docs/manual/note.md" .collab/INDEX.md | grep -q "doc" && \
+  grep "docs/manual/note.md" .collab/INDEX.md | grep -q "claude" && ok || \
+  fail "type/owner not in INDEX row: $(grep 'docs/manual/note.md' .collab/INDEX.md)"
+
+# join codex --branch ... : extra flags after agent name should reach bash.
+TARGET7=$(make_tmp_repo)
+init_with_all_agents "$TARGET7" "$SKILL_ROOT"
+cd "$TARGET7"
+start_test "v0.4.2: cli.js join forwards extra flags (bogus flag rejected)"
+out=$( (node "$CLI" join codex --bogus-extra-flag 2>&1) || true)
+echo "$out" | grep -q "Unknown arg: --bogus-extra-flag" && ok || fail "join extra flag didn't reach bash; got: $out"
+
+cd "$SKILL_ROOT"
+rm -rf "$TARGET3" "$TARGET4" "$TARGET5" "$TARGET6" "$TARGET7"
+
 report

@@ -41,6 +41,7 @@ function main() {
   switch (cmd) {
     case 'init':
       scriptPath = path.join(scriptsDir, 'collab-init.sh');
+      scriptArgs = rest;
       break;
     case 'join':
       if (rest.length === 0) {
@@ -48,10 +49,11 @@ function main() {
         process.exit(1);
       }
       scriptPath = path.join(scriptsDir, 'collab-init.sh');
-      scriptArgs = ['--join', rest[0]];
+      scriptArgs = ['--join', rest[0], ...rest.slice(1)];
       break;
     case 'check':
       scriptPath = path.join(scriptsDir, 'collab-check.sh');
+      scriptArgs = rest;
       break;
     case 'archive':
       if (rest.length === 0) {
@@ -59,7 +61,7 @@ function main() {
         process.exit(1);
       }
       scriptPath = path.join(scriptsDir, 'collab-archive.sh');
-      scriptArgs = [rest[0]];
+      scriptArgs = rest;
       break;
     case 'register':
       if (rest.length === 0) {
@@ -67,7 +69,7 @@ function main() {
         process.exit(1);
       }
       scriptPath = path.join(scriptsDir, 'collab-register.sh');
-      scriptArgs = [rest[0]];
+      scriptArgs = rest;
       break;
     case 'presence':
       scriptPath = path.join(scriptsDir, 'collab-presence.sh');
