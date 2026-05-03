@@ -513,6 +513,36 @@ do_restore() {
     return 0
   fi
 
+  # v0.4.2 (G4): prune migration-created files not present in the backup.
+  # Walk the live framework-managed file set (via collect_backup_paths,
+  # which reads INDEX.md + always-included paths). For any path in live
+  # but NOT in the backup, delete it before restoring. Without this, a
+  # migration that created new descriptors or sentinels would leak into
+  # the post-restore state.
+  local pruned=0
+  if [[ -f .collab/INDEX.md ]]; then
+    # Build a sorted list of paths present in the backup (relative to repo root).
+    local backup_set
+    backup_set=$(find "$target" -type f -print | while IFS= read -r f; do
+      local rel="${f#$target/}"
+      [[ "$rel" == "RESTORE.md" ]] && continue
+      printf '%s\n' "$rel"
+    done | sort -u)
+    while IFS= read -r live_path; do
+      [[ -z "$live_path" ]] && continue
+      # Never touch the backup directory itself or its contents.
+      case "$live_path" in
+        .collab/backup/*|.collab/backup) continue ;;
+      esac
+      # Only files (rm -f handles symlinks by unlinking, not following).
+      [[ -f "$live_path" ]] || [[ -L "$live_path" ]] || continue
+      if ! printf '%s\n' "$backup_set" | grep -qxF "$live_path"; then
+        rm -f "$live_path"
+        pruned=$((pruned + 1))
+      fi
+    done < <(collect_backup_paths)
+  fi
+
   local count=0
   # Walk the backup directory; for every file (other than RESTORE.md), copy it
   # back to its original location (relative to the repo root).
@@ -524,7 +554,11 @@ do_restore() {
     count=$((count + 1))
   done < <(find "$target" -type f -print0)
 
-  echo "restore: restored $count files from $target"
+  if [[ $pruned -gt 0 ]]; then
+    echo "restore: pruned $pruned migration-created file(s); restored $count files from $target"
+  else
+    echo "restore: restored $count files from $target"
+  fi
 }
 
 install_config() {

@@ -85,4 +85,42 @@ out=$( (cd "$TARGET" && bash scripts/collab-init.sh --restore nonexistent-backup
 rc=$?
 [[ $rc -ne 0 ]] && echo "$out" | grep -q "no such backup" && ok || fail "expected error: rc=$rc out=$out"
 
+# --- v0.4.2 (G4): restore prunes migration-created files not in backup ---
+TARGET2=$(make_tmp_repo)
+cp -R "$SKILL_ROOT/scripts" "$TARGET2/scripts"
+cp -R "$SKILL_ROOT/templates" "$TARGET2/templates"
+(cd "$TARGET2" && bash scripts/collab-init.sh) >/dev/null 2>&1
+echo "0.3.0" > "$TARGET2/.collab/VERSION"
+(cd "$TARGET2" && git add -A && git commit -q -m "v0.3.0 baseline")
+
+# Trigger upgrade — backup is captured.
+(cd "$TARGET2" && COLLAB_MIGRATE_NONINTERACTIVE=1 bash scripts/collab-init.sh) >/dev/null 2>&1
+
+# Simulate a migration-created file: drop a managed file in INDEX after upgrade
+# but with no backup-side counterpart (mimics what a future migration would do).
+echo "| docs/agents/leaked.md | work-log | claude | active | 2026-05-02T00:00:00-04:00 |" >> "$TARGET2/.collab/INDEX.md"
+mkdir -p "$TARGET2/docs/agents"
+cat > "$TARGET2/docs/agents/leaked.md" <<'EOF'
+---
+status: active
+type: work-log
+owner: claude
+---
+# Leaked file from migration
+EOF
+
+start_test "G4: restore prunes leaked migration-created file"
+(cd "$TARGET2" && bash scripts/collab-init.sh --restore latest) >/dev/null 2>&1
+[[ ! -f "$TARGET2/docs/agents/leaked.md" ]] && ok || fail "leaked file not pruned on restore"
+
+# --- v0.4.2 (G4): restore does NOT touch the .collab/backup/ directory ---
+start_test "G4: restore does not delete the backup directory"
+[[ -d "$TARGET2/.collab/backup" ]] && ok || fail ".collab/backup/ was deleted by restore"
+
+start_test "G4: restore does not delete files inside .collab/backup/"
+backup_files=$(find "$TARGET2/.collab/backup" -type f | wc -l)
+[[ "$backup_files" -gt 0 ]] && ok || fail "files inside .collab/backup/ were pruned ($backup_files remaining)"
+
+rm -rf "$TARGET2"
+
 report
