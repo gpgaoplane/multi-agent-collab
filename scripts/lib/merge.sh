@@ -31,6 +31,21 @@ merge_replace_section() {
     return 1
   fi
 
+  # v0.4.2: detect doubled markers — the awk pass below treats a second
+  # `start` line as content and would silently duplicate `body` (file ends
+  # with start,body,start,body,end). Loud-fail before that happens.
+  local start_count end_count
+  start_count=$(grep -cF "$start_marker" "$file")
+  end_count=$(grep -cF "$end_marker" "$file")
+  if [[ $start_count -gt 1 ]]; then
+    echo "merge: WARNING $file: marker block '$section' is malformed (duplicate start markers, count=$start_count)" >&2
+    return 1
+  fi
+  if [[ $end_count -gt 1 ]]; then
+    echo "merge: WARNING $file: marker block '$section' is malformed (duplicate end markers, count=$end_count)" >&2
+    return 1
+  fi
+
   local tmp
   tmp=$(mktemp)
 
