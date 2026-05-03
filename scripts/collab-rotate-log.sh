@@ -2,9 +2,11 @@
 # collab-rotate-log.sh — archive older entries in an agent's work log.
 #
 # Detection contract: an entry header is `^## ` followed by an ISO-8601
-# timestamp on the same line. Other `## ` headings (e.g. `## Files`,
-# `## Notes`, `## Handoff blocks`) inside or around an entry are NOT entry
-# boundaries. ANY future change to entry header format must update this regex.
+# date on the same line, optionally followed by a `T` (full datetime) or a
+# space (date + freeform suffix like "## 2026-04-28 task title") or end-of-line.
+# Other `## ` headings (e.g. `## Files`, `## Notes`, `## Handoff blocks`)
+# inside or around an entry are NOT entry boundaries. ANY future change to
+# entry header format must update this regex.
 #
 # Behavior:
 # - Reads rotate_at_lines + rotate_keep_recent from .collab/config.yml
@@ -58,7 +60,7 @@ if [[ -z "$THRESHOLD" ]]; then
 fi
 if [[ -z "$KEEP" ]]; then
   KEEP=$(awk -F': *' '/^rotate_keep_recent:/ { print $2; exit }' "$CFG" 2>/dev/null || true)
-  KEEP="${KEEP:-8}"
+  KEEP="${KEEP:-3}"
 fi
 
 # Normalize line endings for reliable counting and regex matching.
@@ -75,8 +77,11 @@ if [[ $linecount -le $THRESHOLD ]]; then
 fi
 
 # Locate ALL entry header lines (anywhere in file). Entries are demarcated by
-# `^## YYYY-MM-DDTHH:MM:SS...` headers.
-ENTRY_RE='^## 20[0-9]{2}-[0-9]{2}-[0-9]{2}T'
+# `^## YYYY-MM-DD` headers, optionally followed by a `T` (full datetime), a
+# space (date + freeform suffix), or end-of-line. The trailing `([T ]|$)`
+# alternation prevents `## 2026-04-28-something` from accidentally matching
+# while accepting both `## 2026-04-28` and `## 2026-04-28 task title`.
+ENTRY_RE='^## 20[0-9]{2}-[0-9]{2}-[0-9]{2}([T ]|$)'
 mapfile -t entry_starts < <(awk -v re="$ENTRY_RE" '$0 ~ re { print NR }' "$tmp_norm")
 
 if [[ ${#entry_starts[@]} -le $KEEP ]]; then

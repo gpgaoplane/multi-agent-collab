@@ -146,4 +146,83 @@ echo "$out" | grep -q "advisory: docs/agents/claude.md" && echo "$out" | grep -q
 
 rm -rf "$TMP_CHECK"
 
+# --- v0.4.2: date-only entry headers must be detected ---
+# Helper: append N entries with date-only headers (no T-time suffix).
+append_date_only_entries() {
+  local log="$1"
+  local count="$2"
+  for i in $(seq 1 "$count"); do
+    cat >> "$log" <<EOF
+
+## 2026-04-$(printf '%02d' "$i") — Date-only entry $i
+
+Did some work for test $i with a date-only header.
+
+### Files
+- src/bar$i.go
+
+### Task Receipt
+- docs/agents/claude.md ........... new entry $i
+EOF
+  done
+}
+
+TMP_DATEONLY=$(make_tmp_repo)
+trap 'rm -rf "$TMP" "${TMP_CRLF:-}" "${TMP_BELOW:-}" "${TMP_HANDOFF:-}" "${TMP_DATEONLY:-}" "${TMP_MIXED:-}" "${TMP_DEFAULT:-}"' EXIT
+cp -R "$SKILL_ROOT/scripts" "$TMP_DATEONLY/scripts"
+cp -R "$SKILL_ROOT/templates" "$TMP_DATEONLY/templates"
+(cd "$TMP_DATEONLY" && bash scripts/collab-init.sh) >/dev/null 2>&1
+append_date_only_entries "$TMP_DATEONLY/docs/agents/claude.md" 12
+
+start_test "v0.4.2: date-only headers (## 2026-04-28 ...) detected by rotation"
+out=$( (cd "$TMP_DATEONLY" && bash scripts/collab-rotate-log.sh claude --threshold 50 --keep 4) 2>&1)
+echo "$out" | grep -q "archived 8" && ok || fail "date-only rotation failed: $out"
+
+start_test "v0.4.2: archived date-only entries appear in archive file"
+archive_do=$(ls "$TMP_DATEONLY/.collab/archive/agents/"claude-*.md 2>/dev/null | head -1)
+[[ -n "$archive_do" ]] && grep -q "Date-only entry 1" "$archive_do" && ok || fail "date-only entries missing from archive"
+
+# --- v0.4.2: mixed date-only + datetime headers ---
+TMP_MIXED=$(make_tmp_repo)
+cp -R "$SKILL_ROOT/scripts" "$TMP_MIXED/scripts"
+cp -R "$SKILL_ROOT/templates" "$TMP_MIXED/templates"
+(cd "$TMP_MIXED" && bash scripts/collab-init.sh) >/dev/null 2>&1
+append_entries "$TMP_MIXED/docs/agents/claude.md" 6
+append_date_only_entries "$TMP_MIXED/docs/agents/claude.md" 6
+
+start_test "v0.4.2: mixed date-only + datetime headers both detected"
+out=$( (cd "$TMP_MIXED" && bash scripts/collab-rotate-log.sh claude --threshold 50 --keep 4) 2>&1)
+echo "$out" | grep -q "archived 8" && ok || fail "mixed-format rotation failed: $out"
+
+# --- v0.4.2: default rotate_keep_recent is 3 (no flag, no config override) ---
+TMP_DEFAULT=$(make_tmp_repo)
+cp -R "$SKILL_ROOT/scripts" "$TMP_DEFAULT/scripts"
+cp -R "$SKILL_ROOT/templates" "$TMP_DEFAULT/templates"
+(cd "$TMP_DEFAULT" && bash scripts/collab-init.sh) >/dev/null 2>&1
+append_entries "$TMP_DEFAULT/docs/agents/claude.md" 12
+
+start_test "v0.4.2: default rotate_keep_recent is 3 (from shipped config)"
+# Don't pass --keep; rely on config.yml (which now ships 3).
+out=$( (cd "$TMP_DEFAULT" && bash scripts/collab-rotate-log.sh claude --threshold 50) 2>&1)
+echo "$out" | grep -q "kept 3" && ok || fail "expected 'kept 3' from default config: $out"
+
+start_test "v0.4.2: live log has 3 entries after default rotation"
+live_after=$(grep -cE '^## 20[0-9]{2}-[0-9]{2}-[0-9]{2}([T ]|$)' "$TMP_DEFAULT/docs/agents/claude.md")
+assert_eq "3" "$live_after"
+
+# --- v0.4.2: explicit config override still wins ---
+TMP_OVERRIDE=$(make_tmp_repo)
+cp -R "$SKILL_ROOT/scripts" "$TMP_OVERRIDE/scripts"
+cp -R "$SKILL_ROOT/templates" "$TMP_OVERRIDE/templates"
+(cd "$TMP_OVERRIDE" && bash scripts/collab-init.sh) >/dev/null 2>&1
+append_entries "$TMP_OVERRIDE/docs/agents/claude.md" 12
+# Override config to keep 8 (simulating an existing v0.4.1 install).
+sed -i 's/^rotate_keep_recent:.*/rotate_keep_recent: 8/' "$TMP_OVERRIDE/.collab/config.yml"
+
+start_test "v0.4.2: explicit config rotate_keep_recent: 8 still honored"
+out=$( (cd "$TMP_OVERRIDE" && bash scripts/collab-rotate-log.sh claude --threshold 50) 2>&1)
+echo "$out" | grep -q "kept 8" && ok || fail "expected 'kept 8' from config override: $out"
+
+rm -rf "$TMP_OVERRIDE"
+
 report

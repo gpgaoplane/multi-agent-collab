@@ -25,6 +25,33 @@ skip-if: "status != active or last-updated <= your watermark"
 
 <!-- new entries appended below, newest last -->
 
+<!--
+Entry format. The rotation script (`collab-rotate-log.sh`) detects entries by
+`^## YYYY-MM-DD` (optionally with `T`-prefixed time, or a freeform suffix
+after a space). Use ONE of these styles, consistently:
+
+  ## YYYY-MM-DD First task title
+  ## YYYY-MM-DDTHH:MM:SS-TZ — First task title
+
+A worked example follows the conventions referenced in `AI_AGENTS.md`
+behavioral-rules. Replace the placeholder content; keep the heading shape.
+NOTE: the example below uses `YYYY-MM-DD` placeholders so it isn't matched
+by the rotation regex. Use a real ISO-8601 date when you write entries.
+
+```
+## YYYY-MM-DD First task title
+
+**Goal:** what you set out to do.
+**What I did:** brief narrative of the work.
+**Files:** path:line, path:line
+**Branch:** main
+
+### Task Receipt
+- AI_AGENTS.md ............ unchanged
+- docs/agents/{{AGENT_NAME}}.md .... appended this entry
+```
+-->
+
 ## Handoff blocks
 
 When you finish a substantive chunk of work and want another agent to take over,
