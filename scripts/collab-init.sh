@@ -616,7 +616,19 @@ detect_mode() {
     echo "fresh"
     return
   fi
-  local installed="$(cat .collab/VERSION)"
+  local installed
+  installed="$(cat .collab/VERSION)"
+  # v0.4.2: validate VERSION format. Garbage content can cause silent
+  # under-migration via lexicographic compare. Hard-fail with guidance.
+  # NOTE: --restore / --prune-backups / --ack-upgrade short-circuit before
+  # detect_mode runs, so a corrupted VERSION still allows recovery via
+  # `--restore latest` without lockout.
+  if [[ ! "$installed" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "init: .collab/VERSION contains invalid version: '$installed'" >&2
+    echo "Expected semver X.Y.Z. Either restore from a backup with --restore latest," >&2
+    echo "or fix .collab/VERSION manually." >&2
+    exit 1
+  fi
   local shipped="$(cat "$TEMPLATES/collab/VERSION")"
   if [[ "$installed" == "$shipped" ]]; then
     echo "re-init"
