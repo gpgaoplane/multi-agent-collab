@@ -41,11 +41,18 @@ grep -q "update the framework" "$PROTOCOL" && ok || fail "phrase 'update the fra
 start_test "upgrade vocabulary lists check-only 'is there a new version'"
 grep -q "is there a new version" "$PROTOCOL" && ok || fail "check-only phrase missing"
 
-start_test "upgrade vocabulary references collab-check.sh and init"
-grep -q "collab-check.sh" "$PROTOCOL" && grep -q "collab-init.sh" "$PROTOCOL" && ok || fail "upgrade commands missing"
+start_test "upgrade vocabulary references the canonical 'update' command (v0.4.3+)"
+grep -q "collab-update.sh" "$PROTOCOL" && ok || fail "collab-update.sh reference missing"
 
-start_test "upgrade vocabulary references --ack-upgrade"
-grep -q "ack-upgrade" "$PROTOCOL" && ok || fail "ack-upgrade reference missing"
+start_test "upgrade vocabulary documents pre-v0.4.3 backward-compat path (collab-init.sh)"
+grep -q "collab-init.sh" "$PROTOCOL" && ok || fail "collab-init.sh backward-compat reference missing"
+
+start_test "upgrade vocabulary maps 'is there a new version' to update --check"
+grep -qE "update --check" "$PROTOCOL" && ok || fail "update --check mapping missing"
+
+start_test "upgrade vocabulary references --ack-upgrade or update --ack"
+# v0.4.3+: 'update --ack' is canonical; --ack-upgrade is the backward-compat path.
+{ grep -q "ack-upgrade" "$PROTOCOL" || grep -qE "update --ack" "$PROTOCOL"; } && ok || fail "ack reference missing"
 
 start_test "upgrade vocabulary mentions cleanliness check (M2 dependency)"
 grep -q "working tree is dirty" "$PROTOCOL" && ok || fail "dirty-tree caution missing"
