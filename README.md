@@ -4,7 +4,42 @@ A reusable skill for bootstrapping consistent multi-agent collaboration in any G
 
 ## Status
 
-v0.4.2 — correctness patch on top of v0.4.1. Nine post-ship fixes: rotation regex accepts date-only headers, cli.js forwards all flags, pre-commit hook is self-contained, `--restore` prunes migration-created files, `UPGRADE_NOTES.md` is no longer overwritten silently on chained upgrades, `.collab/VERSION` is validated, doubled markers emit warnings, migrations are idempotent via sentinels, `inject_agents_md_section` no-ops on orphan markers. See [`CHANGELOG.md`](CHANGELOG.md) for the full release notes.
+v0.4.3 — single-trigger upgrade ergonomics. New `update` subcommand wraps the entire upgrade flow into one command; vocabulary in PROTOCOL.md tightened to match. Plus a load-bearing fix: `update --rollback` now cleans up stale migration sentinels (without that, post-rollback re-upgrades would silently skip migrations). See [`CHANGELOG.md`](CHANGELOG.md) for the full release notes.
+
+## What's new in v0.4.3
+
+- **`update` subcommand** — `npx @gpgaoplane/multi-agent-collab update` wraps the upgrade flow in a single command: pre-flight version check, interactive confirmation prompt, auto-backup, migration chain, post-flight ack reminder. Modes: `update`, `update --check`, `update --ack`, `update --rollback`. Modifier flags: `--yes` / `-y` (skip prompt), `--diff-first` (preview before apply), `--no-backup`, `--force-dirty`. Replaces the pre-v0.4.3 multi-step `init` → read notes → `--ack-upgrade` flow with a single command. The old flow still works on installs that haven't upgraded yet.
+- **`update --rollback` cleans up stale migration sentinels** — fixes a latent bug where post-rollback re-upgrades would silently skip migration bodies. Critical for any future migration that does real file work; for v0.4.x's no-op summary migrations the practical impact was just "no upgrade banner appeared."
+- **Tightened vocabulary** — PROTOCOL.md "Framework upgrade vocabulary" section points at the new `update` subcommand. New phrases recognized: "preview the upgrade" → `update --diff-first`; "roll back the upgrade" → `update --rollback`; "ack the upgrade" → `update --ack`. Forward-only: existing installs keep their old PROTOCOL.md text (re_init_shared treats it as create-once); functional contract preserved (old 3-command path == new 1-command path). Manual fix below for users who want the new vocab on existing installs.
+- **`scripts/lib/semver.sh`, `scripts/lib/migrations.sh`** — helper functions extracted from `collab-init.sh` so `collab-update.sh` can source them without re-executing init's body. Pure refactor.
+- **41 new tests.**
+
+### Upgrading to v0.4.3
+
+```bash
+# From v0.4.2+:
+npx @gpgaoplane/multi-agent-collab update
+
+# From v0.4.1 (cli.js flag-drop bug — call bash directly):
+bash node_modules/@gpgaoplane/multi-agent-collab/scripts/collab-init.sh
+
+# Then once v0.4.2+ is installed, prefer the new 'update' command for all
+# future upgrades:
+npx @gpgaoplane/multi-agent-collab update
+```
+
+### Manual PROTOCOL.md vocabulary refresh (optional)
+
+Existing v0.4.x installs upgrading to v0.4.3 keep their old `.collab/PROTOCOL.md` text — `re_init_shared` treats PROTOCOL.md as create-once. The old 3-step upgrade vocabulary still works (functionally equivalent to the new 1-command vocab), so this is OPTIONAL. If you want the new "update", "preview the upgrade", "roll back the upgrade" phrases recognized in your installed copy:
+
+```bash
+# Inside your project root (after upgrading to v0.4.3):
+cp node_modules/@gpgaoplane/multi-agent-collab/templates/collab/PROTOCOL.md .collab/PROTOCOL.md
+# OR for skill-clone users:
+cp ~/.claude/skills/multi-agent-collab/templates/collab/PROTOCOL.md .collab/PROTOCOL.md
+```
+
+Warning: this overwrites your `.collab/PROTOCOL.md`. Any local customizations to that file are lost. The vocabulary content is the only meaningful difference between v0.4.2 and v0.4.3 PROTOCOL.md, so this is usually safe — but inspect the diff first if you've customized.
 
 ## What's new in v0.4.2
 

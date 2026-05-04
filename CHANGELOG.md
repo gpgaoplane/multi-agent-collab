@@ -1,5 +1,54 @@
 # Changelog
 
+## 0.4.3 — 2026-05-04
+
+Single-trigger upgrade ergonomics. v0.4.0–v0.4.2 built every preservation mechanism a downstream-project upgrade needs (cleanliness gate, auto-backup, marker-guided merge, migration sentinels, UPGRADE_NOTES auto-archive, byte-equivalent restore). v0.4.3 wraps those layers behind a single `update` subcommand and tightens the user-vocabulary contract in PROTOCOL.md so agents and humans both have one canonical entry point. Mostly additive; one genuinely new state-management behavior in `update --rollback` (sentinel cleanup, see Fixed below).
+
+### Added
+
+- **`update` subcommand** — `npx @gpgaoplane/multi-agent-collab update` (or `bash scripts/collab-update.sh` for local-clone use). Wraps the existing `init` upgrade flow with a pre-flight version check, interactive confirmation prompt, sentinel-aware migration count display, and post-flight ack reminder. Introduces ZERO new preservation mechanisms — every safety layer (cleanliness check, auto-backup, migration sentinels, marker-guided merge, UPGRADE_NOTES auto-archive, byte-equivalent restore) is inherited from `collab-init.sh` unchanged. Modes: `update`, `update --check`, `update --ack`, `update --rollback`. Modifier flags: `--yes` / `-y`, `--diff-first`, `--no-backup`, `--force-dirty`. The script re-execs `init` for the actual upgrade work; it does not source it.
+- **`scripts/lib/semver.sh`** — extracted `version_le` from `collab-init.sh`. Adds `version_lt` and `version_eq` helpers. Numeric three-part compare (avoids the v0.10.0 lex bug). `collab-init.sh` and `collab-update.sh` both source this lib instead of duplicating the function.
+- **`scripts/lib/migrations.sh`** — extracted `ensure_migration_dir`, `write_migration_sentinel`, `is_migration_applied`, `backfill_legacy_sentinels` from `collab-init.sh`. Lets `collab-update.sh` inspect sentinel state without sourcing init's body (which would re-execute its top-level mode dispatch).
+- **`bin/cli.js update` case** — new switch case routes `update` to `scripts/collab-update.sh`. Forwards `rest` for full flag pass-through (same pattern as v0.4.2 G2 fix). USAGE string updated.
+- **`scripts/migrations/0.4.2-to-0.4.3.sh`** — pure no-op summary migration documenting the new subcommand, the rollback sentinel-cleanup fix, and the lib extractions. Sentinel written by the chain runner on completion.
+- **41 new test cases** — `tests/test-collab-update.sh` (36 cases covering all modes, prompt branches, edge cases, and the load-bearing rollback-then-re-upgrade chain that validates sentinel cleanup); 5 new cases in `tests/test-npm-shim.sh` for the `update` subcommand routing.
+
+### Fixed
+
+- **`update --rollback` cleans up stale migration sentinels.** This was a latent correctness issue introduced when v0.4.2 G8 added the sentinel system: after a rollback that reverts `.collab/VERSION` from e.g. `0.4.3` back to `0.4.0`, the sentinels at `.collab/.migrations/0.4.0-to-0.4.1.applied` (etc.) survived because they're not in INDEX (G4's prune logic only touches INDEX-listed paths). The next upgrade would find sentinels with valid SHAs and silently skip every migration — `re_init_shared` would still bump `.collab/VERSION` back to shipped, producing a "ghost upgrade" with no migration bodies executed and no `UPGRADE_NOTES.md` written. For v0.4.x's no-op summary migrations the user-facing impact was just "no upgrade banner appeared, weird"; for any future migration that does real file work, this would be a data-correctness bug. `update --rollback` now parses `<from>` from the latest backup directory name (`<from>-to-<to>-<HMS>`), runs `init --restore latest` (existing M3+G4 behavior), then walks `.collab/.migrations/*.applied` and deletes any sentinel whose `dst > <from>`. Surfaced by Plan-agent critique on the v0.4.3 plan; gated by a load-bearing dogfood test that does the rollback + re-upgrade chain and asserts migration bodies actually run on the second upgrade pass.
+
+### Changed
+
+- **PROTOCOL.md "Framework upgrade vocabulary" section** points at the new `update` subcommand as the canonical flow. The pre-v0.4.3 3-step sequence (init → read notes → `--ack-upgrade`) is documented as the backward-compat path. New phrases recognized: "preview the upgrade" → `update --diff-first`; "roll back the upgrade" → `update --rollback`; "ack the upgrade" → `update --ack`. **Forward-only** for existing installs: `re_init_shared` treats `.collab/PROTOCOL.md` as create-once, so installs upgrading from v0.4.x to v0.4.3 keep their old PROTOCOL.md text. The functional contract is preserved (old 3-command path leads to the same end state as the new 1-command path); the new vocabulary is just shorter to type. Manual fix for existing installs: `cp $SKILL_ROOT/templates/collab/PROTOCOL.md .collab/PROTOCOL.md` (warning: blows away any user customizations to PROTOCOL.md).
+- **`scripts/collab-init.sh`** is shorter — `version_le` (v0.4.2 G8) and the four migration sentinel helpers (also v0.4.2 G8) move out of `collab-init.sh` into the two new libs. `collab-init.sh` sources both libs and contains no inline copies. Pure refactor; no behavior change. Existing tests pass unchanged.
+
+### Notes for users on v0.4.2
+
+```bash
+# Once on v0.4.2+, prefer the new 'update' command:
+npx @gpgaoplane/multi-agent-collab update
+# Or with explicit confirm-skip for CI:
+npx @gpgaoplane/multi-agent-collab update --yes
+```
+
+The pre-v0.4.3 multi-step `init`/`init --ack-upgrade` flow continues to work — no breaking change.
+
+### Notes for users on v0.4.1 (cli.js flag-drop bug)
+
+If you're still on v0.4.1, the cli.js shim silently drops every flag for `init` and `update`. Call bash directly to upgrade:
+
+```bash
+bash node_modules/@gpgaoplane/multi-agent-collab/scripts/collab-init.sh
+# (later, after v0.4.2+ is installed)
+bash node_modules/@gpgaoplane/multi-agent-collab/scripts/collab-update.sh
+```
+
+Once v0.4.2 is installed the cli.js shim correctly forwards flags, and from v0.4.3 onward the `update` subcommand is the canonical entry point.
+
+### Notes for users on v0.3.0 or earlier
+
+The full migration chain (0.3.0 → 0.4.0 → 0.4.1 → 0.4.2 → 0.4.3) runs automatically. v0.4.3 sits at the end of the chain and is purely additive. Auto-backup runs first; `update --rollback` (or `init --restore latest`) rolls back if anything looks wrong. The 0.4.0 release notes still apply for the breaking calling-agent-only bootstrap change.
+
 ## 0.4.2 — 2026-05-03
 
 Correctness patch fixing nine post-ship issues surfaced by real-world use of v0.4.0 and v0.4.1. Mostly additive; one shipped-default change called out below. No file renames in user repos. Migrations are now idempotent — a re-run after an interrupted upgrade is a safe no-op.
