@@ -10,6 +10,9 @@ const USAGE = `Usage: multi-agent-collab <command> [args]
 
 Commands:
   init                     Bootstrap multi-agent collab in the current repo
+  update [flags]           Upgrade to the latest framework version
+                             modes: --check, --ack, --rollback
+                             flags: --yes, --diff-first, --no-backup, --force-dirty
   join <name>              Add a new agent (claude/codex/gemini or any name)
   check                    Audit INDEX vs filesystem
   archive <path>           Archive a file
@@ -41,6 +44,10 @@ function main() {
   switch (cmd) {
     case 'init':
       scriptPath = path.join(scriptsDir, 'collab-init.sh');
+      scriptArgs = rest;
+      break;
+    case 'update':
+      scriptPath = path.join(scriptsDir, 'collab-update.sh');
       scriptArgs = rest;
       break;
     case 'join':

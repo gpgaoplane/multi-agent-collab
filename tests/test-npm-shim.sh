@@ -109,4 +109,37 @@ echo "$out" | grep -q "Unknown arg: --bogus-extra-flag" && ok || fail "join extr
 cd "$SKILL_ROOT"
 rm -rf "$TARGET3" "$TARGET4" "$TARGET5" "$TARGET6" "$TARGET7"
 
+# --- v0.4.3: cli.js routes 'update' subcommand to collab-update.sh ---
+
+# 'update --help' should reach bash and print update's usage (not init's)
+TARGET8=$(make_tmp_repo)
+start_test "v0.4.3: cli.js update --help reaches collab-update.sh"
+out=$(node "$CLI" update --help 2>&1)
+echo "$out" | grep -q "Usage: collab-update.sh" && ok || fail "expected update usage; got: $out"
+
+# 'update --check' on a fresh bootstrapped repo
+TARGET9=$(make_tmp_repo)
+init_with_all_agents "$TARGET9" "$SKILL_ROOT"
+start_test "v0.4.3: cli.js update --check reaches collab-update.sh"
+out=$( (cd "$TARGET9" && node "$CLI" update --check) 2>&1)
+echo "$out" | grep -q "Multi-agent-collab framework" && ok || fail "expected check output; got: $out"
+
+# Unknown flag forwarded — proves cli.js passes flags through to update.
+start_test "v0.4.3: cli.js update --bogus-flag-xyz reaches bash with the flag"
+out=$( (cd "$TARGET9" && node "$CLI" update --bogus-flag-xyz) 2>&1 || true)
+echo "$out" | grep -q "unknown arg: --bogus-flag-xyz" && ok || fail "bogus flag didn't reach update.sh; got: $out"
+
+# 'update' on a non-bootstrapped repo (no .collab/) should error helpfully
+TARGET10=$(make_tmp_repo)
+start_test "v0.4.3: cli.js update on non-bootstrapped repo errors with bootstrap hint"
+out=$( (cd "$TARGET10" && node "$CLI" update --check) 2>&1 || true)
+echo "$out" | grep -q "not bootstrapped" && ok || fail "expected bootstrap error; got: $out"
+
+# Verify USAGE string mentions update
+start_test "v0.4.3: cli.js USAGE includes 'update' command"
+usage=$(node "$CLI" --help 2>&1)
+echo "$usage" | grep -q "update " && ok || fail "USAGE doesn't list update; got: $usage"
+
+rm -rf "$TARGET8" "$TARGET9" "$TARGET10"
+
 report
