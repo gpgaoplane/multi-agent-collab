@@ -117,19 +117,47 @@ When a work log grows past the threshold (default 300 lines), the user will not 
 
 ## Framework upgrade vocabulary (universal)
 
-When a newer skill version is available (or the user wants to check), these phrases trigger the upgrade flow.
+When a newer skill version is available (or the user wants to check), these phrases trigger the upgrade flow. v0.4.3+ ships a single `update` subcommand that wraps the entire flow.
 
 **User says** (any of):
 - "update the framework" / "upgrade the collab framework"
 - "get the latest version" / "pull the latest"
-- "check for updates and apply"
 - "update multi-agent-collab"
-- "is there a new version" (this one runs the check only — no apply)
+- "upgrade to the latest version"
 
-**Agent action:**
-1. Run `bash scripts/collab-check.sh` first — its update advisory reports if a newer version exists. If "is there a new version" was the trigger, stop here and report.
-2. Run `npx @gpgaoplane/multi-agent-collab init` (or `bash <local-clone>/scripts/collab-init.sh` if working from a local clone). Migration prompts appear.
-3. After migration completes, follow the **post-upgrade ritual** below: read `.collab/UPGRADE_NOTES.md`, re-read `AI_AGENTS.md` `behavioral-rules`, then run `bash scripts/collab-init.sh --ack-upgrade`.
+**Agent action (canonical — v0.4.3+):**
+
+```bash
+bash scripts/collab-update.sh         # local-clone form
+# OR
+npx @gpgaoplane/multi-agent-collab update   # npm form
+```
+
+The command:
+1. Compares installed vs. shipped version. Exits if already current.
+2. Prints a summary (installed, latest, migrations to run) and asks for confirmation interactively.
+3. Auto-backs up framework-managed files before any change.
+4. Runs the migration chain.
+5. Writes `.collab/UPGRADE_NOTES.md`.
+
+After it returns, agent then:
+
+6. Reads `.collab/UPGRADE_NOTES.md` in full.
+7. Re-reads `AI_AGENTS.md` `behavioral-rules` (rules may have changed).
+8. Reports the changes to the user.
+9. Once user confirms they've absorbed the changes, runs:
+   ```bash
+   bash scripts/collab-update.sh --ack
+   ```
+   This archives `UPGRADE_NOTES.md` and runs `collab-check` to confirm clean state.
+
+**Other phrases:**
+- "is there a new version" / "check for updates" → `update --check` (cache-only check; no state change)
+- "preview the upgrade" / "show me what will change" → `update --diff-first` (shows diff, then confirm, then apply)
+- "roll back the upgrade" / "undo the upgrade" → `update --rollback` (restores latest backup + cleans stale migration sentinels)
+- "ack the upgrade" / "archive the upgrade notes" → `update --ack`
+
+**Backward compatibility (pre-v0.4.3):** `bash scripts/collab-init.sh` (then read notes; then `--ack-upgrade`) still works on installs that haven't upgraded to v0.4.3 yet. The `update` subcommand is just sugar over that flow.
 
 **Sanity rule:** if the working tree is dirty, the upgrade will block (M2 cleanliness check). Commit or stash uncommitted work before triggering an upgrade.
 
