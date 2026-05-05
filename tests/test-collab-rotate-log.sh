@@ -225,4 +225,112 @@ echo "$out" | grep -q "kept 8" && ok || fail "expected 'kept 8' from config over
 
 rm -rf "$TMP_OVERRIDE"
 
+# --- v0.4.4: same-day archive append (no clobber) ---
+# Bug: scripts/collab-rotate-log.sh:142-154 wrote the archive with `> "$ARCHIVE_FILE"`
+# (clobber). Filename is date-stamped, so a second rotation on the same day
+# silently destroyed the prior archive's entry bodies. Fix: append to existing
+# archive on same-day re-rotation; fresh-write only when file is absent.
+
+# Setup: 12 entries; first rotate keep=8 (archives 1..4); second rotate keep=3
+# (archives 5..9, appended to existing archive). Both on same calendar day.
+TMP_APPEND=$(make_tmp_repo)
+trap 'rm -rf "$TMP" "${TMP_CRLF:-}" "${TMP_BELOW:-}" "${TMP_HANDOFF:-}" "${TMP_DATEONLY:-}" "${TMP_MIXED:-}" "${TMP_DEFAULT:-}" "${TMP_APPEND:-}" "${TMP_NOFM:-}" "${TMP_DRY:-}" "${TMP_FRESH:-}"' EXIT
+cp -R "$SKILL_ROOT/scripts" "$TMP_APPEND/scripts"
+cp -R "$SKILL_ROOT/templates" "$TMP_APPEND/templates"
+(cd "$TMP_APPEND" && bash scripts/collab-init.sh) >/dev/null 2>&1
+append_entries "$TMP_APPEND/docs/agents/claude.md" 12
+
+start_test "v0.4.4: first rotation writes fresh archive (regression check)"
+out1=$( (cd "$TMP_APPEND" && bash scripts/collab-rotate-log.sh claude --threshold 50 --keep 8) 2>&1)
+echo "$out1" | grep -q "wrote 4 entries to fresh" && ok || fail "expected fresh-write stderr; got: $out1"
+
+archive_app=$(ls "$TMP_APPEND/.collab/archive/agents/"claude-*.md 2>/dev/null | head -1)
+[[ -n "$archive_app" ]] || fail "no archive after first rotation"
+
+start_test "v0.4.4: archive after first rotation contains 4 entries"
+first_count=$(grep -cE '^## 20[0-9]{2}-[0-9]{2}-[0-9]{2}T' "$archive_app")
+assert_eq "4" "$first_count"
+
+start_test "v0.4.4: second rotation same day appends to existing archive (no clobber)"
+out2=$( (cd "$TMP_APPEND" && bash scripts/collab-rotate-log.sh claude --threshold 50 --keep 3) 2>&1)
+echo "$out2" | grep -q "appended 5 entries to existing" && ok || fail "expected append stderr; got: $out2"
+
+start_test "v0.4.4: archive after second rotation contains BOTH archived blocks (4+5=9 entries)"
+second_count=$(grep -cE '^## 20[0-9]{2}-[0-9]{2}-[0-9]{2}T' "$archive_app")
+assert_eq "9" "$second_count"
+
+start_test "v0.4.4: archive contains exactly one '### Continued — rotated' separator after one append"
+cont_count=$(grep -cE '^### Continued — rotated ' "$archive_app")
+assert_eq "1" "$cont_count"
+
+start_test "v0.4.4: continuation marker is H3, not H2 (avoids ^## entry-counter inflation)"
+h2_cont=$(grep -cE '^## Continued' "$archive_app" || true)
+assert_eq "0" "$h2_cont"
+
+start_test "v0.4.4: archive's original entries (1..4) still present after append"
+grep -q "Test entry 1" "$archive_app" && grep -q "Test entry 4" "$archive_app" && ok || fail "first-rotation entries lost"
+
+start_test "v0.4.4: archive's newly-appended entries (5..9) present"
+grep -q "Test entry 5" "$archive_app" && grep -q "Test entry 9" "$archive_app" && ok || fail "second-rotation entries missing"
+
+start_test "v0.4.4: terminal message says 'appended to' for the append case"
+echo "$out2" | grep -q "archived 5 entries (appended to" && ok || fail "expected 'appended to' in terminal msg; got: $out2"
+
+# --- v0.4.4: append to existing archive without frontmatter (warns but succeeds) ---
+TMP_NOFM=$(make_tmp_repo)
+cp -R "$SKILL_ROOT/scripts" "$TMP_NOFM/scripts"
+cp -R "$SKILL_ROOT/templates" "$TMP_NOFM/templates"
+(cd "$TMP_NOFM" && bash scripts/collab-init.sh) >/dev/null 2>&1
+append_entries "$TMP_NOFM/docs/agents/claude.md" 12
+mkdir -p "$TMP_NOFM/.collab/archive/agents"
+NOW_DATE_NOFM=$(date +%Y%m%d)
+# Hand-craft an archive file with NO frontmatter — just a markdown body.
+cat > "$TMP_NOFM/.collab/archive/agents/claude-${NOW_DATE_NOFM}.md" <<'EOF'
+# Hand-edited archive (no frontmatter)
+
+Some pre-existing content the user wrote manually.
+EOF
+
+start_test "v0.4.4: append to no-frontmatter archive emits stderr warning"
+out3=$( (cd "$TMP_NOFM" && bash scripts/collab-rotate-log.sh claude --threshold 50 --keep 4) 2>&1)
+echo "$out3" | grep -q "WARNING.*has no frontmatter" && ok || fail "expected no-frontmatter warning; got: $out3"
+
+start_test "v0.4.4: no-frontmatter archive still receives appended content"
+grep -q "Hand-edited archive" "$TMP_NOFM/.collab/archive/agents/claude-${NOW_DATE_NOFM}.md" && \
+  grep -q "Test entry 1" "$TMP_NOFM/.collab/archive/agents/claude-${NOW_DATE_NOFM}.md" && ok || \
+  fail "expected pre-existing content + appended entries in no-fm archive"
+
+# --- v0.4.4: --dry-run on existing archive does NOT mutate the archive ---
+TMP_DRY=$(make_tmp_repo)
+cp -R "$SKILL_ROOT/scripts" "$TMP_DRY/scripts"
+cp -R "$SKILL_ROOT/templates" "$TMP_DRY/templates"
+(cd "$TMP_DRY" && bash scripts/collab-init.sh) >/dev/null 2>&1
+append_entries "$TMP_DRY/docs/agents/claude.md" 12
+# First rotation creates the archive.
+(cd "$TMP_DRY" && bash scripts/collab-rotate-log.sh claude --threshold 50 --keep 8) >/dev/null 2>&1
+archive_dry=$(ls "$TMP_DRY/.collab/archive/agents/"claude-*.md 2>/dev/null | head -1)
+archive_dry_sha_before=$(sha1sum "$archive_dry" 2>/dev/null | awk '{print $1}' || shasum "$archive_dry" | awk '{print $1}')
+
+start_test "v0.4.4: --dry-run on existing archive leaves it byte-equivalent"
+(cd "$TMP_DRY" && bash scripts/collab-rotate-log.sh claude --threshold 50 --keep 3 --dry-run) >/dev/null 2>&1
+archive_dry_sha_after=$(sha1sum "$archive_dry" 2>/dev/null | awk '{print $1}' || shasum "$archive_dry" | awk '{print $1}')
+assert_eq "$archive_dry_sha_before" "$archive_dry_sha_after"
+
+# --- v0.4.4: fresh-write path produces archive with frontmatter (regression check) ---
+TMP_FRESH=$(make_tmp_repo)
+cp -R "$SKILL_ROOT/scripts" "$TMP_FRESH/scripts"
+cp -R "$SKILL_ROOT/templates" "$TMP_FRESH/templates"
+(cd "$TMP_FRESH" && bash scripts/collab-init.sh) >/dev/null 2>&1
+append_entries "$TMP_FRESH/docs/agents/claude.md" 12
+
+start_test "v0.4.4: first rotation produces archive with status: archived frontmatter"
+(cd "$TMP_FRESH" && bash scripts/collab-rotate-log.sh claude --threshold 50 --keep 4) >/dev/null 2>&1
+archive_fresh=$(ls "$TMP_FRESH/.collab/archive/agents/"claude-*.md 2>/dev/null | head -1)
+head -1 "$archive_fresh" | grep -q '^---$' && grep -q '^status: archived$' "$archive_fresh" && ok || \
+  fail "fresh-write archive missing frontmatter"
+
+start_test "v0.4.4: first rotation archive has NO continuation marker"
+zero_cont=$(grep -cE '^### Continued — rotated ' "$archive_fresh" || true)
+assert_eq "0" "$zero_cont"
+
 report

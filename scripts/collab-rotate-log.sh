@@ -140,18 +140,42 @@ if [[ $DRY -eq 1 ]]; then
 fi
 
 mkdir -p "$ARCHIVE_DIR"
-{
-  printf -- '---\n'
-  printf 'status: archived\n'
-  printf 'type: work-log\n'
-  printf 'owner: %s\n' "$AGENT"
-  printf 'last-updated: %s\n' "$(bash "$HERE/collab-now.sh")"
-  printf 'read-if: "researching historical context from %s before %s"\n' "$AGENT" "$NOW_DATE"
-  printf 'skip-if: "you only need recent activity"\n'
-  printf -- '---\n\n'
-  printf '# %s — Archived entries (rotated %s)\n\n' "$AGENT" "$NOW_DATE"
-  printf '%s\n' "$archived_block"
-} > "$ARCHIVE_FILE"
+# v0.4.4: append-on-existing semantics. Filename is date-stamped, so a second
+# rotation on the same day would clobber the first under shell `>` redirection.
+# Append preserves both archive contents; fresh-write keeps current behavior on
+# the first rotation of the day.
+ARCHIVE_MODE="fresh"
+if [[ -f "$ARCHIVE_FILE" ]]; then
+  ARCHIVE_MODE="append"
+fi
+
+if [[ "$ARCHIVE_MODE" == "fresh" ]]; then
+  {
+    printf -- '---\n'
+    printf 'status: archived\n'
+    printf 'type: work-log\n'
+    printf 'owner: %s\n' "$AGENT"
+    printf 'last-updated: %s\n' "$(bash "$HERE/collab-now.sh")"
+    printf 'read-if: "researching historical context from %s before %s"\n' "$AGENT" "$NOW_DATE"
+    printf 'skip-if: "you only need recent activity"\n'
+    printf -- '---\n\n'
+    printf '# %s — Archived entries (rotated %s)\n\n' "$AGENT" "$NOW_DATE"
+    printf '%s\n' "$archived_block"
+  } > "$ARCHIVE_FILE"
+  echo "rotate: wrote ${cut_idx} entries to fresh $ARCHIVE_FILE" >&2
+else
+  # Append path. Detect frontmatter; warn if missing but still append (don't
+  # corrupt or refuse). H3 "Continued" header (not H2) avoids inflating
+  # `^## ` entry counts in downstream tools.
+  if ! awk 'NR==1 && /^---$/ { exit 0 } NR>=1 { exit 1 }' "$ARCHIVE_FILE"; then
+    echo "rotate: WARNING $ARCHIVE_FILE has no frontmatter; appending raw. Consider repairing the archive file." >&2
+  fi
+  {
+    printf '\n\n### Continued — rotated %s\n\n' "$(bash "$HERE/collab-now.sh")"
+    printf '%s\n' "$archived_block"
+  } >> "$ARCHIVE_FILE"
+  echo "rotate: appended ${cut_idx} entries to existing $ARCHIVE_FILE" >&2
+fi
 
 # Build new live log: same content as tmp_norm, but lines from archive_start_line
 # through archive_end_line are deleted; summaries are inserted inside the
@@ -208,4 +232,8 @@ rm -f "$tmp_norm" "$new_log" "$new_log.body"
 bash "$HERE/collab-register.sh" "$ARCHIVE_FILE" >/dev/null 2>&1 || true
 bash "$HERE/collab-register.sh" "$LOG" >/dev/null 2>&1 || true
 
-echo "rotate: archived ${cut_idx} entries to $ARCHIVE_FILE; kept $KEEP recent entries in $LOG."
+if [[ "$ARCHIVE_MODE" == "append" ]]; then
+  echo "rotate: archived ${cut_idx} entries (appended to $ARCHIVE_FILE); kept $KEEP recent entries in $LOG."
+else
+  echo "rotate: archived ${cut_idx} entries to $ARCHIVE_FILE; kept $KEEP recent entries in $LOG."
+fi
