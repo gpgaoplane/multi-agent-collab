@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.4.4 — 2026-05-05
+
+Small correctness patch surfaced by real-world v0.4.3 use in a downstream project. Two field bugs (one data-loss, one UX-loop) plus an aligned regex sweep that was missed in v0.4.2.
+
+### Fixed
+
+- **Same-day archive clobber in `collab-rotate-log.sh`** — pre-fix, the archive write at `scripts/collab-rotate-log.sh:142-154` used `> "$ARCHIVE_FILE"` (clobber). Filename is date-stamped, so any second rotation on the same calendar day silently destroyed the prior archive's entry bodies. Reproduces with: rotate → change `rotate_keep_recent` → rotate again. Marker-block one-liner summaries in the live log survived (Receipt info), but full entry bodies were lost. New behavior: when the archive file already exists, append an H3 `### Continued — rotated <ISO>` separator + the new archived block to the existing file. Fresh-write semantics unchanged when the file is absent. No `--force` flag — manual `rm` covers the rare reset case. Surfaced organically by the user's downstream "Career Ops" project; pre-flight backup zip happened to preserve evidence (otherwise 17 entries would have been lost permanently).
+- **Rotation advisory loop in `collab-check.sh`** — pre-fix, `check_rotation_threshold` at `:137-145` advised running rotate purely on `wc -l > rotate_at_lines`, regardless of whether rotation would actually do anything. When the live log already had `≤ rotate_keep_recent` entries (rotation a no-op), the advisory persisted forever — user runs rotate → "nothing to do" → next check still says advisory → loop. New behavior: count dated entries with the v0.4.2-corrected regex; if `entry_count ≤ keep_recent`, emit a different advisory pointing at `rotate_at_lines` config tuning (or accepting the verbose Receipt size) instead of looping the user through useless rotate invocations. Three-way regex alignment now enforced by tests across `collab-rotate-log.sh:84`, the advisory site, and the `--stats` site (G3).
+- **`--stats` mode entry-count regex aligned** — `scripts/collab-check.sh:44` still used the legacy `T`-required regex (`^## 20[0-9]{2}-...T`) that v0.4.2 fixed in `collab-rotate-log.sh:84`. Date-only entry headers (`## 2026-04-28 task title`) have been silently undercounted in `--stats` output since v0.4.2. **User-visible behavior change**: projects using date-only headers will now see higher (correct) entry counts in `--stats`. This is the truth, not a regression.
+
+### Changed
+
+- **Rotation advisory text** now distinguishes "rotation would help" from "rotation would be a no-op" — see Fixed (advisory loop) above. The original `advisory: <log> is N lines (threshold T). Run: ./scripts/collab-rotate-log.sh <agent>` text is unchanged when entries exceed `keep_recent`.
+
+### Notes for users on v0.4.3
+
+```bash
+# Standard one-command upgrade (same as v0.4.3 → applies the v0.4.4 patch):
+npx @gpgaoplane/multi-agent-collab update
+
+# Or with auto-confirm for CI:
+npx @gpgaoplane/multi-agent-collab update --yes
+```
+
+No state migration required. The migration script `scripts/migrations/0.4.3-to-0.4.4.sh` is a no-op summary banner. The chain runner writes the sentinel automatically. Re-init refreshes managed sections; user content outside `<!-- collab:NAME:start/end -->` markers is preserved.
+
+If your downstream project hit the v0.4.3 same-day clobber and you have the pre-flight backup zip from `.collab-upgrade-backups/`, you can recover the lost entries from there. Going forward, append-on-existing prevents recurrence.
+
 ## 0.4.3 — 2026-05-04
 
 Single-trigger upgrade ergonomics. v0.4.0–v0.4.2 built every preservation mechanism a downstream-project upgrade needs (cleanliness gate, auto-backup, marker-guided merge, migration sentinels, UPGRADE_NOTES auto-archive, byte-equivalent restore). v0.4.3 wraps those layers behind a single `update` subcommand and tightens the user-vocabulary contract in PROTOCOL.md so agents and humans both have one canonical entry point. Mostly additive; one genuinely new state-management behavior in `update --rollback` (sentinel cleanup, see Fixed below).

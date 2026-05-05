@@ -4,7 +4,24 @@ A reusable skill for bootstrapping consistent multi-agent collaboration in any G
 
 ## Status
 
-v0.4.3 — single-trigger upgrade ergonomics. New `update` subcommand wraps the entire upgrade flow into one command; vocabulary in PROTOCOL.md tightened to match. Plus a load-bearing fix: `update --rollback` now cleans up stale migration sentinels (without that, post-rollback re-upgrades would silently skip migrations). See [`CHANGELOG.md`](CHANGELOG.md) for the full release notes.
+v0.4.4 — small correctness patch. Fixes a same-day archive clobber in `collab-rotate-log.sh` (data loss bug), kills the rotation-advisory loop in `collab-check.sh` when the log is already at keep-minimum, and aligns the `--stats` entry-count regex with the v0.4.2-corrected pattern. See [`CHANGELOG.md`](CHANGELOG.md) for the full release notes.
+
+## What's new in v0.4.4
+
+- **Same-day archive append (no clobber)** — `collab-rotate-log.sh` now appends to an existing same-day archive instead of overwriting it. Pre-fix, rotating twice in one day (e.g., after tweaking `rotate_keep_recent`) silently destroyed the prior archive's entry bodies. Append uses an H3 `### Continued — rotated <ISO>` separator so the archive stays one human-readable file per agent-day.
+- **Content-aware rotation advisory** — `collab-check.sh` no longer advises rotation when rotation would be a no-op. When the live log exceeds `rotate_at_lines` but the entry count is already at-or-below `rotate_keep_recent`, the advisory text now points at config tuning (raise `rotate_at_lines` or accept the verbose Receipt size) instead of looping the user through useless `rotate` invocations.
+- **`--stats` regex aligned** — `--stats` mode now counts date-only entry headers (`## 2026-04-28 title`) correctly. Projects using date-only headers will see higher (correct) entry counts in `--stats` output than under v0.4.3.
+- **2 new test cases on the rotate side, 16 new test cases on the check side** — including a three-way regex-alignment guard across `collab-rotate-log.sh`, the advisory site, and the `--stats` site.
+
+### Upgrading to v0.4.4
+
+```bash
+# Standard one-command upgrade (no state migration required):
+npx @gpgaoplane/multi-agent-collab update
+
+# Auto-confirm for CI:
+npx @gpgaoplane/multi-agent-collab update --yes
+```
 
 ## What's new in v0.4.3
 
