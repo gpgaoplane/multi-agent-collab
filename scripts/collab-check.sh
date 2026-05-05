@@ -41,7 +41,7 @@ if [[ $STATS_MODE -eq 1 ]]; then
     log_lines=0
     open_handoffs=0
     if [[ -f "$log" ]]; then
-      entries=$(grep -cE '^## 20[0-9]{2}-[0-9]{2}-[0-9]{2}T' "$log" 2>/dev/null || true)
+      entries=$(grep -cE '^## 20[0-9]{2}-[0-9]{2}-[0-9]{2}([T ]|$)' "$log" 2>/dev/null || true)
       log_lines=$(wc -l < "$log" | tr -d ' ')
       # Open handoff = a handoff:start marker whose status line is "open".
       open_handoffs=$(awk '

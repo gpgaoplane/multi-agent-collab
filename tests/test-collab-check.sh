@@ -218,4 +218,50 @@ grep -F "$ROTATE_REGEX_LIT" "$SKILL_ROOT/scripts/collab-rotate-log.sh" >/dev/nul
   grep -F "$ROTATE_REGEX_LIT" "$SKILL_ROOT/scripts/collab-check.sh" >/dev/null && ok || \
   fail "regex literal '$ROTATE_REGEX_LIT' not present in both rotate-log.sh and check.sh"
 
+# --- v0.4.4: G3 --stats regex alignment ---
+# Pre-fix collab-check.sh:44 used the legacy `T`-required regex, undercounting
+# date-only entry headers (## 2026-04-28 title) since v0.4.2 fixed the same
+# bug in collab-rotate-log.sh:84. Align here.
+
+# Case 8: --stats counts date-only entries correctly.
+TMP_STATS=$(make_tmp_repo)
+trap 'rm -rf "$TMP" "${TMP_OVER:-}" "${TMP_AT:-}" "${TMP_BELOW:-}" "${TMP_NOTH:-}" "${TMP_LEGACY:-}" "${TMP_INVALID:-}" "${TMP_REGEX:-}" "${TMP_STATS:-}"' EXIT
+init_with_all_agents "$TMP_STATS" "$SKILL_ROOT"
+# Append 2 date-only entries + 1 datetime entry.
+cat >> "$TMP_STATS/docs/agents/claude.md" <<'EOF'
+
+## 2026-04-15 — Date-only entry alpha
+
+Body alpha.
+
+### Task Receipt
+- docs/agents/claude.md ........... new entry alpha
+
+## 2026-04-16 — Date-only entry bravo
+
+Body bravo.
+
+### Task Receipt
+- docs/agents/claude.md ........... new entry bravo
+
+## 2026-04-17T10:00:00-05:00 — Datetime entry charlie
+
+Body charlie.
+
+### Task Receipt
+- docs/agents/claude.md ........... new entry charlie
+EOF
+
+start_test "v0.4.4: --stats counts date-only headers (3 entries: 2 date-only + 1 datetime)"
+out_stats=$( (cd "$TMP_STATS" && bash "$CHECK" --stats) 2>&1 || true)
+# Expected row format: `claude        3        ...`
+echo "$out_stats" | grep -E '^claude\s+3\s' >/dev/null && ok || fail "expected entries=3 for claude in --stats; got:\n$out_stats"
+
+# Case 9: three-way regex alignment — same literal in rotate-log, advisory site, stats site.
+start_test "v0.4.4: G3 --stats regex aligns with rotate-log + advisory regex (three-way)"
+# Count occurrences of the literal in collab-check.sh: should be at least 2
+# (advisory site + --stats site). Guards against accidental partial revert.
+check_occurrences=$(grep -cF "$ROTATE_REGEX_LIT" "$SKILL_ROOT/scripts/collab-check.sh")
+[[ "$check_occurrences" -ge 2 ]] && ok || fail "expected regex literal in >= 2 places of collab-check.sh; found $check_occurrences"
+
 report
