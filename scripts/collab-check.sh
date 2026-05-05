@@ -118,12 +118,24 @@ else
 fi
 
 # --- Rotation threshold check (non-fatal) ---
+# v0.4.4: advisory is content-aware. When the live log is over rotate_at_lines
+# but the entry count is already at-or-below rotate_keep_recent, rotation would
+# be a no-op. Emit a different advisory pointing the user at config tuning
+# instead of a useless rotation invocation.
 check_rotation_threshold() {
   local cfg=".collab/config.yml"
   [[ -f "$cfg" ]] || return 0
   local threshold
   threshold=$(awk -F': *' '/^rotate_at_lines:/ { print $2; exit }' "$cfg")
   [[ -n "$threshold" && "$threshold" =~ ^[0-9]+$ ]] || return 0
+
+  # rotate_keep_recent: default 3 (matches scripts/collab-rotate-log.sh:62-64).
+  # Validate as positive numeric; non-numeric, zero, or negative falls back to 3.
+  local keep_recent
+  keep_recent=$(awk -F': *' '/^rotate_keep_recent:/ { print $2; exit }' "$cfg" 2>/dev/null || true)
+  if ! [[ "$keep_recent" =~ ^[0-9]+$ ]] || [[ "$keep_recent" -le 0 ]]; then
+    keep_recent=3
+  fi
 
   local warned=0
   for desc in .collab/agents.d/*.yml; do
@@ -141,7 +153,19 @@ check_rotation_threshold() {
       fi
       local agent
       agent=$(basename "$desc" .yml)
-      echo "advisory: $log is $count lines (threshold $threshold). Run: ./scripts/collab-rotate-log.sh $agent"
+      # Count dated entries with the v0.4.2-corrected regex. MUST stay literal-equal
+      # to scripts/collab-rotate-log.sh:84 — regex_alignment_advisory_vs_rotate test
+      # asserts this. Three-way alignment with collab-check.sh --stats (line 44, G3).
+      # grep -c writes the count to stdout but exits 1 when the count is 0.
+      # `|| true` swallows the exit-1; `${var:-0}` defends against empty stdout.
+      local entry_count
+      entry_count=$(grep -cE '^## 20[0-9]{2}-[0-9]{2}-[0-9]{2}([T ]|$)' "$log" 2>/dev/null || true)
+      entry_count="${entry_count:-0}"
+      if [[ "$entry_count" -le "$keep_recent" ]]; then
+        echo "advisory: $log is $count lines but already at rotate_keep_recent=$keep_recent ($entry_count entries). Rotation would be a no-op. Consider raising rotate_at_lines in .collab/config.yml, or accepting the verbose Receipt size."
+      else
+        echo "advisory: $log is $count lines (threshold $threshold). Run: ./scripts/collab-rotate-log.sh $agent"
+      fi
     fi
   done
 }
