@@ -5,13 +5,11 @@ set -euo pipefail
 
 # GNU date (Linux) supports %:z. BSD date (macOS) needs %z with manual insertion of colon.
 # Windows Git Bash ships GNU date. Try %:z first; fall back to %z with sed.
-if out=$(date +'%Y-%m-%dT%H:%M:%S%:z' 2>/dev/null) && [[ "$out" == *:* ]]; then
-  # Guard: the timezone part (last 6 chars) must contain a colon to count as %:z success.
-  tz="${out: -6}"
-  if [[ "$tz" == *:* ]]; then
-    echo "$out"
-    exit 0
-  fi
+# BSD date prints an unknown %:z as ":z", so check the whole offset shape
+# (±HH:MM) rather than just looking for a colon.
+if out=$(date +'%Y-%m-%dT%H:%M:%S%:z' 2>/dev/null) && [[ "$out" =~ [+-][0-9]{2}:[0-9]{2}$ ]]; then
+  echo "$out"
+  exit 0
 fi
 
 # Fallback: insert colon into ±HHMM → ±HH:MM

@@ -45,7 +45,7 @@ start_test "re-init still passes collab-check"
 
 # v0.4.0 Group D: re-init refreshes the commit-cadence rule into stale AI_AGENTS.md
 start_test "re-init re-introduces commit Cadence rule when stripped from existing AI_AGENTS.md"
-sed -i '/Cadence/d' "$TMP/AI_AGENTS.md"
+sed_inplace '/Cadence/d' "$TMP/AI_AGENTS.md"
 if grep -q "Cadence" "$TMP/AI_AGENTS.md"; then
   fail "precondition: Cadence should be removed for this test"
 else

@@ -100,7 +100,7 @@ if [[ "$VERB" == "ack" ]]; then
     echo "catchup ack: $STATE has no 'Last read INDEX at:' line inside the read-watermark section; cannot update" >&2
     exit 1
   fi
-  mv "$tmp" "$STATE"
+  cat "$tmp" > "$STATE" && rm -f "$tmp"
   echo "watermark updated: $NOW"
   exit 0
 fi

@@ -125,7 +125,7 @@ for i in 1 2 3 4 5 6 7; do
   touch -t "2026010${i}0000" "$T8/.collab/backup/test-${i}"
 done
 # Override default in config to keep_recent_backups: 2
-sed -i 's/^keep_recent_backups:.*/keep_recent_backups: 2/' "$T8/.collab/config.yml"
+sed_inplace 's/^keep_recent_backups:.*/keep_recent_backups: 2/' "$T8/.collab/config.yml"
 (cd "$T8" && bash scripts/collab-init.sh --prune-backups) >/dev/null 2>&1
 n=$(ls -1 "$T8/.collab/backup/" | wc -l | tr -d ' ')
 assert_eq "2" "$n"

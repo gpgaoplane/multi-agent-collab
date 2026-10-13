@@ -15,7 +15,7 @@ bash "$SKILL_ROOT/scripts/collab-init.sh" >/dev/null 2>&1
 STATE=.claude/memory/state.md
 
 start_test "catchup prints files newer than watermark"
-sed -i 's|Last read INDEX at: (not yet read)|Last read INDEX at: 2020-01-01T00:00:00-00:00|' "$STATE"
+sed_inplace 's|Last read INDEX at: (not yet read)|Last read INDEX at: 2020-01-01T00:00:00-00:00|' "$STATE"
 output=$(bash "$CATCHUP" --agent claude 2>&1)
 echo "$output" | grep -q ".collab/ROUTING.md" && ok || fail "expected ROUTING.md in catchup output"
 
@@ -51,7 +51,7 @@ bash "$SKILL_ROOT/scripts/collab-init.sh" >/dev/null 2>&1
 
 start_test "catchup with up-to-date watermark prints nothing"
 NOW=$(bash "$SKILL_ROOT/scripts/collab-now.sh")
-sed -i "s|Last read INDEX at: .*|Last read INDEX at: $NOW|" "$STATE"
+sed_inplace "s|Last read INDEX at: .*|Last read INDEX at: $NOW|" "$STATE"
 output=$(bash "$CATCHUP" --agent claude 2>&1)
 [[ -z "$output" || "$output" =~ "up to date" ]] && ok || fail "expected empty/up-to-date, got: $output"
 
@@ -84,7 +84,7 @@ bash "$SKILL_ROOT/scripts/collab-init.sh" >/dev/null 2>&1
 STATE4=.claude/memory/state.md
 
 # Roll the watermark back so preview has something to show.
-sed -i 's|Last read INDEX at: (not yet read)|Last read INDEX at: 2020-01-01T00:00:00-00:00|' "$STATE4"
+sed_inplace 's|Last read INDEX at: (not yet read)|Last read INDEX at: 2020-01-01T00:00:00-00:00|' "$STATE4"
 
 start_test "ack updates watermark to a value different from the pre-ack timestamp"
 pre_wm=$(grep "Last read INDEX at:" "$STATE4")

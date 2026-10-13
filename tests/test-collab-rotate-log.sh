@@ -140,7 +140,7 @@ append_entries "$TMP_CHECK/docs/agents/claude.md" 12
 
 start_test "collab-check advises rotation when log > rotate_at_lines"
 # Override threshold to 50 so 12 entries clearly exceed.
-sed -i 's/^rotate_at_lines:.*/rotate_at_lines: 50/' "$TMP_CHECK/.collab/config.yml"
+sed_inplace 's/^rotate_at_lines:.*/rotate_at_lines: 50/' "$TMP_CHECK/.collab/config.yml"
 out=$( (cd "$TMP_CHECK" && bash scripts/collab-check.sh) 2>&1)
 echo "$out" | grep -q "advisory: docs/agents/claude.md" && echo "$out" | grep -q "collab-rotate-log.sh claude" && ok || fail "no rotation advisory: $out"
 
@@ -217,7 +217,7 @@ cp -R "$SKILL_ROOT/templates" "$TMP_OVERRIDE/templates"
 (cd "$TMP_OVERRIDE" && bash scripts/collab-init.sh) >/dev/null 2>&1
 append_entries "$TMP_OVERRIDE/docs/agents/claude.md" 12
 # Override config to keep 8 (simulating an existing v0.4.1 install).
-sed -i 's/^rotate_keep_recent:.*/rotate_keep_recent: 8/' "$TMP_OVERRIDE/.collab/config.yml"
+sed_inplace 's/^rotate_keep_recent:.*/rotate_keep_recent: 8/' "$TMP_OVERRIDE/.collab/config.yml"
 
 start_test "v0.4.2: explicit config rotate_keep_recent: 8 still honored"
 out=$( (cd "$TMP_OVERRIDE" && bash scripts/collab-rotate-log.sh claude --threshold 50) 2>&1)

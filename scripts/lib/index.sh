@@ -79,7 +79,7 @@ idx_upsert() {
     }
   ' "$file" > "$tmp"
 
-  mv "$tmp" "$file"
+  cat "$tmp" > "$file" && rm -f "$tmp"
 }
 
 # idx_list_with_timestamps <index> — emit tab-separated path\tlast-updated
@@ -122,5 +122,5 @@ idx_remove() {
     }
   ' "$file" > "$tmp"
 
-  mv "$tmp" "$file"
+  cat "$tmp" > "$file" && rm -f "$tmp"
 }

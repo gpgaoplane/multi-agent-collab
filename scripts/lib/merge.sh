@@ -49,13 +49,22 @@ merge_replace_section() {
   local tmp
   tmp=$(mktemp)
 
-  awk -v start="$start_marker" -v end="$end_marker" -v body="$new_content" '
+  # The body goes through ENVIRON, not `awk -v`: BSD awk (macOS) rejects a
+  # -v value containing a newline ("newline in string"), and -v also expands
+  # backslash escapes in the content.
+  if ! COLLAB_MERGE_BODY="$new_content" awk -v start="$start_marker" -v end="$end_marker" '
     {
-      if ($0 == start) { print; print body; skipping = 1; next }
+      if ($0 == start) { print; print ENVIRON["COLLAB_MERGE_BODY"]; skipping = 1; next }
       if ($0 == end) { skipping = 0; print; next }
       if (!skipping) print
     }
-  ' "$file" > "$tmp"
+  ' "$file" > "$tmp"; then
+    rm -f "$tmp"
+    echo "merge_replace_section: awk failed on $file; file left unchanged" >&2
+    return 1
+  fi
 
-  mv "$tmp" "$file"
+  # Copy back instead of mv so the file keeps its mode (mktemp creates 0600).
+  cat "$tmp" > "$file"
+  rm -f "$tmp"
 }

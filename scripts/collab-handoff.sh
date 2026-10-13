@@ -117,7 +117,7 @@ case "$VERB" in
       in_blk && /^- \*\*status:\*\*/ { print "- **status:** " ns; next }
       { print }
     ' "$target_log" > "$tmp"
-    mv "$tmp" "$target_log"
+    cat "$tmp" > "$target_log" && rm -f "$tmp"
     echo "handoff $ID -> $newstatus"
     ;;
 
@@ -183,7 +183,7 @@ case "$VERB" in
       }
       { print }
     ' "$found_log" > "$tmp"
-    mv "$tmp" "$found_log"
+    cat "$tmp" > "$found_log" && rm -f "$tmp"
 
     # Bump INDEX timestamp so other agents see the activity.
     bash "$HERE/collab-register.sh" "$found_log" >/dev/null 2>&1 || true

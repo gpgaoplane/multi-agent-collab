@@ -113,14 +113,14 @@ EOF
 set_threshold() {
   local repo="$1"
   local val="$2"
-  sed -i "s/^rotate_at_lines:.*/rotate_at_lines: $val/" "$repo/.collab/config.yml"
+  sed_inplace "s/^rotate_at_lines:.*/rotate_at_lines: $val/" "$repo/.collab/config.yml"
 }
 
 set_keep_recent() {
   local repo="$1"
   local val="$2"
   if grep -q "^rotate_keep_recent:" "$repo/.collab/config.yml"; then
-    sed -i "s/^rotate_keep_recent:.*/rotate_keep_recent: $val/" "$repo/.collab/config.yml"
+    sed_inplace "s/^rotate_keep_recent:.*/rotate_keep_recent: $val/" "$repo/.collab/config.yml"
   else
     echo "rotate_keep_recent: $val" >> "$repo/.collab/config.yml"
   fi
@@ -190,7 +190,7 @@ init_with_all_agents "$TMP_LEGACY" "$SKILL_ROOT"
 make_log_with_entries "$TMP_LEGACY/docs/agents/claude.md" 3
 set_threshold "$TMP_LEGACY" 30
 # Strip rotate_keep_recent from config to simulate a legacy install.
-sed -i '/^rotate_keep_recent:/d' "$TMP_LEGACY/.collab/config.yml"
+sed_inplace '/^rotate_keep_recent:/d' "$TMP_LEGACY/.collab/config.yml"
 
 start_test "v0.4.4: legacy config without rotate_keep_recent uses default 3"
 out_legacy=$( (cd "$TMP_LEGACY" && bash "$CHECK") 2>&1 || true)

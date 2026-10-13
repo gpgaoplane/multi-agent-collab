@@ -202,12 +202,13 @@ if grep -q '<!-- collab:log-archived-summary:start -->' "$new_log.body"; then
   merge_replace_section "$new_log.body" "log-archived-summary" "$combined"
 else
   # Legacy log: inject a marker block right after the first '---' separator.
-  awk -v summaries="$summaries" '
+  # ENVIRON, not -v: BSD awk rejects multi-line -v values.
+  COLLAB_SUMMARIES="$summaries" awk '
     !inserted && /^---$/ && NR > 1 {
       print
       print ""
       print "<!-- collab:log-archived-summary:start -->"
-      print summaries
+      print ENVIRON["COLLAB_SUMMARIES"]
       print "<!-- collab:log-archived-summary:end -->"
       print ""
       inserted = 1

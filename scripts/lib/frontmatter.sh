@@ -71,5 +71,5 @@ fm_set_field() {
     { print }
   ' "$file" > "$tmp"
 
-  mv "$tmp" "$file"
+  cat "$tmp" > "$file" && rm -f "$tmp"
 }

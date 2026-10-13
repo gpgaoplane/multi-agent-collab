@@ -58,7 +58,7 @@ echo "$out2" | grep -q ">>> Upgrade summary (v0.3.0" && \
   fail "migration re-ran despite sentinel" || ok
 
 # --- SHA mismatch: tamper with sentinel to force re-run ---
-sed -i 's/^script-sha: .*/script-sha: deadbeef-bogus-sha/' "$TARGET/.collab/.migrations/0.3.0-to-0.4.0.applied"
+sed_inplace 's/^script-sha: .*/script-sha: deadbeef-bogus-sha/' "$TARGET/.collab/.migrations/0.3.0-to-0.4.0.applied"
 echo "0.3.0" > "$TARGET/.collab/VERSION"
 out3=$( (cd "$TARGET" && COLLAB_MIGRATE_NONINTERACTIVE=1 bash scripts/collab-init.sh) 2>&1)
 

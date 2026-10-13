@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+macOS portability. The test suite only ran on Ubuntu, and on macOS about 50 tests failed. Most of them came from one data-loss bug in the marker merge.
+
+### Fixed
+
+- **Marker merge wiped files on macOS** — `merge_replace_section` (`scripts/lib/merge.sh`) passed the new section body to awk with `-v body=...`. BSD awk (the macOS `/usr/bin/awk`) rejects a `-v` value that contains a newline (`awk: newline in string`), so the temp file came out empty, and the unconditional `mv` then replaced the target with it. Every multi-line managed section (AI_AGENTS.md, AGENTS.md, ACTIVE.md presence rows, the work-log archived summary) was blanked on `init`, `join`, `update` and `presence`, and the function still returned 0. The body now goes through `ENVIRON`, and the target stays unchanged if awk fails. A side benefit is that `-v` no longer expands backslash escapes in the body, so content such as `C:\new` is written verbatim on every platform.
+- **Legacy-log summary insert in `collab-rotate-log.sh`** used the same multi-line `-v` pattern and now uses `ENVIRON` too.
+- **`collab-now.sh` printed `...T05:12:54:z` on macOS** — BSD `date` prints an unknown `%:z` as the literal `:z`, which passed the old "contains a colon" check. The output must now end in `±HH:MM` before the `%:z` result is used; otherwise the `%z` fallback runs.
+- **Rewritten files lost their mode** — the `mktemp` + `mv` rewrites in `merge.sh`, `index.sh`, `frontmatter.sh`, `collab-handoff.sh` and `collab-catchup.sh` left the files at `0600` (for example `.collab/INDEX.md`). The temp content is now copied back into the existing file, so the file keeps its mode.
+
+### Tests / CI
+
+- `test.yml` now runs on both `ubuntu-latest` and `macos-latest`.
+- `tests/harness.sh` has a new `sed_inplace` helper. The tests used GNU-only `sed -i '<expr>' file`, which BSD sed reads as a backup suffix.
+- `test-collab-check-update.sh` uses a per-test registry file instead of the shared `/tmp/fake-registry.json`. It also captures the output before running `grep -q`: piping straight into `grep -q` under `pipefail` failed at random when grep exited early and `collab-check.sh` got SIGPIPE.
+- `test-merge.sh` has new tests for mode preservation and verbatim backslashes.
+
 ## 0.4.4 — 2026-05-05
 
 Small correctness patch surfaced by real-world v0.4.3 use in a downstream project. Two field bugs (one data-loss, one UX-loop) plus an aligned regex sweep that was missed in v0.4.2.

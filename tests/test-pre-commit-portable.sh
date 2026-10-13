@@ -53,7 +53,7 @@ cd "$TARGET2"
 bash "$SKILL_ROOT/scripts/collab-init.sh" --install-hooks >/dev/null 2>&1
 git config user.email "test@example.com"
 git config user.name "Test"
-sed -i 's/^strict:.*/strict: true/' .collab/config.yml
+sed_inplace 's/^strict:.*/strict: true/' .collab/config.yml
 mkdir -p docs/agents
 cat > docs/agents/claude.md <<'EOF'
 # Claude Work Log

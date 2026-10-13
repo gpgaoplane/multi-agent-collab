@@ -53,4 +53,19 @@ else
   fail "should have errored on missing marker"
 fi
 
+start_test "merge_replace_section keeps the file mode"
+cat > "$TMP/mode.md" <<'EOF'
+<!-- collab:rules:start -->
+old
+<!-- collab:rules:end -->
+EOF
+chmod 644 "$TMP/mode.md"
+merge_replace_section "$TMP/mode.md" "rules" "new"
+mode=$(stat -c '%a' "$TMP/mode.md" 2>/dev/null || stat -f '%Lp' "$TMP/mode.md")
+assert_eq "644" "$mode" "mode changed after merge"
+
+start_test "merge_replace_section writes backslashes verbatim"
+merge_replace_section "$TMP/mode.md" "rules" 'path C:\new\tab and a literal \n'
+assert_file_contains "$TMP/mode.md" 'path C:\new\tab and a literal \n'
+
 report

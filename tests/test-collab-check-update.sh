@@ -13,20 +13,25 @@ start_test "collab-check with local-file update channel prints advisory when ver
 # Write a fake registry file and point COLLAB_UPDATE_URL at it.
 # Explicitly clear CI — GitHub Actions (and other CI envs) set CI=true, which
 # would short-circuit check_for_update and hide the advisory we want to see.
-echo '{"dist-tags":{"latest":"99.0.0"}}' > /tmp/fake-registry.json
-env -u CI COLLAB_UPDATE_URL="file:///tmp/fake-registry.json" \
-  bash "$SKILL_ROOT/scripts/collab-check.sh" 2>&1 | grep -q "newer version" && ok || fail "no advisory emitted"
+# Output is captured before grepping: piping straight into `grep -q` under
+# pipefail fails at random when grep exits early and collab-check gets SIGPIPE.
+echo '{"dist-tags":{"latest":"99.0.0"}}' > "$TARGET/fake-registry.json"
+out=$(env -u CI COLLAB_UPDATE_URL="file://$TARGET/fake-registry.json" \
+  bash "$SKILL_ROOT/scripts/collab-check.sh" 2>&1)
+grep -q "newer version" <<<"$out" && ok || fail "no advisory emitted"
 
 start_test "CI=true suppresses the advisory"
 rm -f .collab/.update-cache
-CI=true COLLAB_UPDATE_URL="file:///tmp/fake-registry.json" \
-  bash "$SKILL_ROOT/scripts/collab-check.sh" 2>&1 | grep -q "newer version" && fail "advisory should be silent in CI" || ok
+out=$(CI=true COLLAB_UPDATE_URL="file://$TARGET/fake-registry.json" \
+  bash "$SKILL_ROOT/scripts/collab-check.sh" 2>&1)
+grep -q "newer version" <<<"$out" && fail "advisory should be silent in CI" || ok
 
 start_test "config update_channel: none suppresses advisory"
-sed -i 's/update_channel: npm/update_channel: none/' .collab/config.yml
+sed_inplace 's/update_channel: npm/update_channel: none/' .collab/config.yml
 rm -f .collab/.update-cache
-env -u CI COLLAB_UPDATE_URL="file:///tmp/fake-registry.json" \
-  bash "$SKILL_ROOT/scripts/collab-check.sh" 2>&1 | grep -q "newer version" && fail "update_channel:none should silence" || ok
+out=$(env -u CI COLLAB_UPDATE_URL="file://$TARGET/fake-registry.json" \
+  bash "$SKILL_ROOT/scripts/collab-check.sh" 2>&1)
+grep -q "newer version" <<<"$out" && fail "update_channel:none should silence" || ok
 
 cd "$SKILL_ROOT"
 rm -rf "$TARGET"

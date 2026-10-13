@@ -7,12 +7,23 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      # The scripts use bash 4 features (mapfile); macOS ships bash 3.2.
+      # BSD awk/sed/date/stat stay the system ones, which is what this job tests.
+      - name: Ensure bash 4+ on macOS
+        if: runner.os == 'macOS'
+        run: |
+          brew list bash >/dev/null 2>&1 || brew install bash
+          bash --version | head -1
       - name: Make scripts executable
         run: chmod +x scripts/*.sh scripts/hooks/* tests/*.sh
       - name: Run test suite

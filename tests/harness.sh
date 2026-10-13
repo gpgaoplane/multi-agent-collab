@@ -69,6 +69,16 @@ report() {
   [[ $FAIL -eq 0 ]]
 }
 
+# sed_inplace <sed-args...> <file>
+# Portable `sed -i`: GNU sed takes `-i`, BSD sed (macOS) needs `-i ''`.
+sed_inplace() {
+  local file="${!#}"
+  local tmp
+  tmp=$(mktemp)
+  sed "${@:1:$#-1}" "$file" > "$tmp" && cat "$tmp" > "$file"
+  rm -f "$tmp"
+}
+
 make_tmp_repo() {
   local dir
   dir=$(mktemp -d)

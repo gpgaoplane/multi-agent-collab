@@ -61,7 +61,7 @@ git commit -q -m "short form"
 start_test "diff mode: a line that REMOVES a receipt must NOT count as adding"
 # Stage a delete-only diff (remove the last receipt). This must fail; grep
 # for '^+### Task Receipt' — not just '### Task Receipt' — is what prevents this.
-sed -i '/^### Task Receipt$/,$d' "$LOG"
+sed_inplace '/^### Task Receipt$/,$d' "$LOG"
 git add "$LOG"
 bash "$VERIFY" "$LOG" && fail "deletion diff should not count as adding a receipt" || ok
 git checkout -q "$LOG"
